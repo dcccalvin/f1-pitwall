@@ -10,6 +10,17 @@ import path from 'node:path';
 
 const LOCK_STALE_MS = 30000;
 
+/** Where a session's recording lives (one file per session). */
+export function recordingPath(dir, state) {
+  const info = state?.SessionInfo || {};
+  const name = [
+    (info.StartDate || new Date().toISOString()).slice(0, 10),
+    info.Meeting?.Name || 'session',
+    info.Name || '',
+  ].join(' ').replace(/[^\p{L}\p{N} _-]+/gu, '').trim().replace(/\s+/g, '_');
+  return path.join(dir, `${name}.jsonl`);
+}
+
 export class Recorder {
   constructor(dir, { log = console } = {}) {
     this.dir = dir;
@@ -51,12 +62,7 @@ export class Recorder {
     if (this.stream && key === this.sessionKey) return;
     this.close(false);
     if (!this.hasLock && !this.#lock()) return;
-    const name = [
-      (info.StartDate || new Date().toISOString()).slice(0, 10),
-      info.Meeting?.Name || 'session',
-      info.Name || '',
-    ].join(' ').replace(/[^\p{L}\p{N} _-]+/gu, '').trim().replace(/\s+/g, '_');
-    this.file = path.join(this.dir, `${name}.jsonl`);
+    this.file = recordingPath(this.dir, state);
     this.stream = fs.createWriteStream(this.file, { flags: 'a' });
     this.sessionKey = key;
   }

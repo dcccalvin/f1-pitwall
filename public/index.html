@@ -63,6 +63,8 @@
     </button>
   </header>
 
+  <div class="netbar" id="netbar" hidden role="status" aria-live="polite"><i></i><span></span></div>
+
   <main class="layout" id="layout"></main>
 
   <!-- Widgets. The layout engine moves these into columns / tab groups. -->
@@ -80,9 +82,20 @@
     </section>
 
     <section class="widget" id="w-map" data-w="map">
-      <div class="w-tools"><span class="map-mode" id="map-mode">Estimated</span></div>
+      <div class="w-tools">
+        <button class="mini-btn" id="map-follow" title="Zoom in and follow the selected driver"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Follow</button>
+        <span class="map-mode" id="map-mode">Estimated</span>
+      </div>
       <div class="map-wrap" id="map-wrap"><div class="map-placeholder">Loading circuit…</div></div>
       <div class="map-foot" id="map-foot"></div>
+    </section>
+
+    <section class="widget" id="w-driver" data-w="driver">
+      <div class="driver" id="driver"></div>
+    </section>
+
+    <section class="widget" id="w-pace" data-w="pace">
+      <div class="pace" id="pace"></div>
     </section>
 
     <section class="widget" id="w-radar" data-w="radar">

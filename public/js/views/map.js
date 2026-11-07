@@ -28,7 +28,12 @@ export class TrackMap {
     this.key = null;
     this.circuit = null;
     this.dots = new Map();
-    this.display = new Map(); // num -> smoothed lap fraction
+    this.display = new Map(); // num -> smoothed progress (laps)
+    this.gone = new Set(); // cars currently faded out (pits, garage)
+    this.follow = localStorage.getItem("mapFollow") === "1";
+    this.followBtn = document.getElementById("map-follow");
+    this.followBtn?.classList.toggle("on", this.follow);
+    this.followBtn?.addEventListener("click", () => { if (!store.selected) { store.toast("Pick a driver first: click one in the timing tower or on the map."); return; } this.setFollow(!this.follow); });
     this.flagged = new Map(); // marshal sector -> 'yellow' | 'red'
     this.lastFrame = performance.now();
     this.wrap.addEventListener('click', (e) => {
@@ -63,6 +68,7 @@ export class TrackMap {
     const tt = c.trackPositionTime || pts.map((_, i) => i);
     const lapT = tt.at(-1) || 1;
     this.circuit = { raw: c, pts, rot, cx, cy, tt, lapT, size };
+    this.store.circuit = c; // pit-loss figures for the driver panel
 
     const root = svg('svg', { viewBox: `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`, preserveAspectRatio: 'xMidYMid meet' });
     const d = `M${pts.map((p) => `${p.x.toFixed(0)},${p.y.toFixed(0)}`).join('L')}Z`;
@@ -103,6 +109,8 @@ export class TrackMap {
     this.wrap.innerHTML = '';
     this.wrap.append(root);
     this.svg = root;
+    this.fullVB = [minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2];
+    this.vb = null;
     this.#applyFlags();
   }
 
@@ -206,6 +214,10 @@ export class TrackMap {
     const sel = this.store.selected;
     const prio = sel && order.includes(sel) ? [sel, ...order.filter((n) => n !== sel)] : order;
 
+    const zoomK = this.#zoomK();
+    const dotScale = 1 / zoomK ** 0.65; // dots grow a little when zoomed in, not hugely
+    let selPoint = null;
+
     prio.forEach((num) => {
       const i = order.indexOf(num);
       const l = lines[num];
@@ -213,34 +225,69 @@ export class TrackMap {
       let p = null;
       if (live) {
         const g = this.gps.pos(num, now);
-        if (g && !(g.x === 0 && g.y === 0)) p = rotate(g.x, g.y, this.circuit.rot, this.circuit.cx, this.circuit.cy);
-      } else if (!l.InPit && !l.Retired && !l.Stopped) {
+        if (g && !(g.x === 0 && g.y === 0) && !(kind(s) !== 'race' && l.InPit)) p = rotate(g.x, g.y, this.circuit.rot, this.circuit.cx, this.circuit.cy);
+      } else if (this.est.visible(num) && !l.Retired && !l.Stopped) {
         // Continuous progress in laps (never wraps), so easing never runs the wrong way round.
         const target = this.est.progress(num, now, s, slow);
         if (target != null) {
           let disp = this.display.get(num);
-          // Only jump for a genuinely new position (first sight, back from the garage).
-          if (disp == null || Math.abs(target - disp) > 0.35) disp = target;
-          else disp += (target - disp) * (1 - Math.exp(-dt * 7)); // smooth, frame-rate independent
+          if (disp == null || this.gone.has(num) || target - disp > 0.35 || disp - target > 0.25) {
+            disp = target; // genuinely new position (first sight, back from the pits): place it there
+          } else if (target > disp) {
+            // Ease towards the target, but never faster than ~2x the car's real pace.
+            const vmax = this.est.pace(num, s) * 1000 * 2.2 * dt;
+            disp += Math.min((target - disp) * (1 - Math.exp(-dt * 6)), vmax);
+          } // target slightly behind: hold still rather than drive backwards
           this.display.set(num, disp);
           p = this.#pointAt(((disp % 1) + 1) % 1);
         }
       }
-      const hidden = !p || (l.InPit && !live) || (kind(s) !== 'race' && l.InPit);
-      if (hidden) return;
-      seen.add(num);
       const g = this.#dot(num, dl[num]);
-      g.setAttribute('transform', `translate(${p.x.toFixed(0)},${p.y.toFixed(0)})`);
-      const clash = labels.some((b) => Math.abs(b.x - p.x) < lw && Math.abs(b.y - p.y) < lh);
+      if (!p) { // fade out (pits, garage, retired) and remember it was gone
+        if (!this.gone.has(num)) { this.gone.add(num); g.classList.add('gone'); }
+        return;
+      }
+      seen.add(num);
+      g.setAttribute('transform', `translate(${p.x.toFixed(0)},${p.y.toFixed(0)}) scale(${dotScale.toFixed(3)})`);
+      if (sel === num) selPoint = p;
+      const clash = labels.some((b) => Math.abs(b.x - p.x) < lw * dotScale && Math.abs(b.y - p.y) < lh * dotScale);
       if (!clash) labels.push(p);
-      const cls = `car-dot${i === 0 ? ' leader' : ''}${sel === num ? ' selected' : ''}${l.Retired || l.Stopped ? ' dim' : ''}${clash ? ' nolabel' : ''}`;
+      const faded = sel && sel !== num && this.follow;
+      const cls = `car-dot${i === 0 ? ' leader' : ''}${sel === num ? ' selected' : ''}${l.Retired || l.Stopped ? ' dim' : ''}${clash ? ' nolabel' : ''}${faded ? ' faded' : ''}`;
       if (g.getAttribute('class') !== cls) g.setAttribute('class', cls);
-      g.style.display = '';
+      this.gone.delete(num); // fades back in at its new place
     });
-    for (const [num, g] of this.dots) if (!seen.has(num)) g.style.display = 'none';
+    for (const [num, g] of this.dots) if (!seen.has(num) && !g.classList.contains('gone')) { g.classList.add('gone'); this.gone.add(num); }
     // draw leader & selected on top
     const top = [order[0], this.store.selected].filter((n) => n && this.dots.get(n));
-    for (const n of top) this.carLayer.append(this.dots.get(n));
+    for (const n of top) if (this.carLayer.lastChild !== this.dots.get(n)) this.carLayer.append(this.dots.get(n));
+    this.#camera(selPoint, dt);
+  }
+
+  /** Follow mode: glide the view to keep the selected car centred and zoomed in. */
+  #camera(p, dt) {
+    const full = this.fullVB;
+    if (!full) return;
+    let target = full;
+    if (this.follow && p) {
+      const w = this.circuit.size * 0.42;
+      const box = this.wrap.getBoundingClientRect();
+      const h = box.width ? (w * box.height) / box.width : w;
+      target = [p.x - w / 2, p.y - h / 2, w, h];
+    }
+    const k = 1 - Math.exp(-dt * 3.5);
+    this.vb = this.vb ? this.vb.map((v, i) => v + (target[i] - v) * k) : [...full];
+    this.svg.setAttribute('viewBox', this.vb.map((v) => v.toFixed(1)).join(' '));
+  }
+
+  #zoomK() {
+    return this.fullVB && this.vb ? this.fullVB[2] / this.vb[2] : 1;
+  }
+
+  setFollow(on) {
+    this.follow = !!on;
+    localStorage.setItem('mapFollow', this.follow ? '1' : '0');
+    this.followBtn?.classList.toggle('on', this.follow);
   }
 }
 
