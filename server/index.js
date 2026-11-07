@@ -272,6 +272,8 @@ const server = http.createServer(async (req, res) => {
 
 // ------------------------------------------------------------------ websocket
 const wss = new WebSocketServer({ server, path: '/ws' });
+// The HTTP server's own handler (below) explains "port in use"; don't crash here first.
+wss.on('error', (e) => { if (e.code !== 'EADDRINUSE') console.error('[ws]', e.message); });
 const clients = new Set();
 
 function send(ws, msg) {
