@@ -79,7 +79,8 @@ export class Settings {
       </section>
 
       <section class="set-sec">
-        <h3>About</h3>
+        <h3>About <span class="tag">v${esc(info.version || '?')}</span></h3>
+        ${info.folder && local ? `<p class="muted">Running from <b>${esc(info.folder)}</b></p>` : ''}
         <p class="muted">Unofficial personal dashboard built on F1's public live timing feed. Not associated with Formula 1. Circuit outlines from MultiViewer. For personal use only.</p>
       </section>`;
   }

@@ -25,6 +25,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
 const cacheDir = path.join(root, 'cache');
 const recordingsDir = path.join(root, 'recordings');
+const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 
 // ------------------------------------------------------------------ args
 const argv = process.argv.slice(2);
@@ -210,6 +211,7 @@ const server = http.createServer(async (req, res) => {
         mode, status: statusPayload(), maxDelay: MAX_DELAY_S, defaultDelay: cfg.defaultDelay,
         phoneUrl, phoneQr: phoneUrl ? await QRCode.toDataURL(phoneUrl, { margin: 1, width: 220, color: { dark: '#0b0d10', light: '#ffffff' } }) : null,
         canEditSettings: isLocal(req),
+        version: VERSION, folder: root,
       });
     }
     if (url.pathname === '/api/circuit') {
@@ -321,10 +323,20 @@ setInterval(() => {
 }, 100);
 
 // ------------------------------------------------------------------ go
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n  Port ${port} is already in use: Pit Wall (or another app) is already running.`);
+    console.error(`  Close the other Pit Wall window first, or start this one on another port with --port 3001.\n`);
+    process.exit(1);
+  }
+  throw e;
+});
+
 server.listen(port, '0.0.0.0', () => {
   const ips = lanAddresses();
   console.log('');
-  console.log(`  Pit Wall · ${mode.toUpperCase()}${mode === 'live' ? (cfg.f1tvToken ? ' · F1 TV data on' : ' · free data') : ''}`);
+  console.log(`  Pit Wall v${VERSION} · ${mode.toUpperCase()}${mode === 'live' ? (cfg.f1tvToken ? ' · F1 TV data on' : ' · free data') : ''}`);
+  console.log(`  Running from:    ${root}`);
   console.log(`  On this laptop:  http://localhost:${port}`);
   if (ips[0]) console.log(`  On your phone:   http://${ips[0]}:${port}  (same Wi-Fi)`);
   console.log('');
