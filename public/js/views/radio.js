@@ -1,5 +1,6 @@
 // Team radio: list of clips with a single shared audio player.
 import { esc, teamColor, sessionLocalTime } from '../format.js';
+import { avatar } from '../media.js';
 
 const PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
 const PAUSE = '<svg viewBox="0 0 16 16"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/></svg>';
@@ -62,7 +63,7 @@ function contextAt(state) {
     }
     if (session === 'Aborted') return ['red', 'Red flag'];
     if (session === 'Inactive') return everStarted ? ['paused', 'Before restart'] : ['pre', 'Before start'];
-    if (session === 'Finished' || session === 'Finalised' || session === 'Ends') return ['pre', 'After the flag'];
+    if (session === 'Finished' || session === 'Finalised' || session === 'Ends') return ['pre', 'After the chequered flag'];
     if (/SCDeployed/i.test(track || '')) return ['sc', 'Safety car'];
     if (/VSC/i.test(track || '')) return ['sc', 'VSC'];
     if (/Red/i.test(track || '')) return ['red', 'Red flag'];
@@ -172,7 +173,7 @@ export class TeamRadio {
       const mine = String(c.RacingNumber) === String(this.store.selected);
       return `<div class="clip${i < fresh ? ' fresh' : ''}${mine ? ' mine' : ''}" data-path="${esc(c.Path)}" style="--tc:${teamColor(d)}">
         <button class="play" aria-label="Play">${PLAY}</button>
-        <div><div class="clip-who"><b data-select="${esc(c.RacingNumber)}" title="Follow ${esc(d.Tla || c.RacingNumber)}">${esc(d.Tla || c.RacingNumber)}</b>${tag ? `<em class="clip-tag ${tag[0]}" title="What was happening when this clip was recorded">${tag[1]}</em>` : ''}<span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div><div class="clip-bar"><i></i></div></div>
+        <div><div class="clip-who">${avatar(d, "av av-sm")}<b data-select="${esc(c.RacingNumber)}" title="Follow ${esc(d.Tla || c.RacingNumber)}">${esc(d.Tla || c.RacingNumber)}</b>${tag ? `<em class="clip-tag ${tag[0]}" title="What was happening when this clip was recorded">${tag[1]}</em>` : ''}<span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div><div class="clip-bar"><i></i></div></div>
         <div class="clip-time" title="Recorded at (track time)">${esc(c.Utc ? sessionLocalTime(c.Utc, off) : '')}</div>
       </div>`;
     }).join('');

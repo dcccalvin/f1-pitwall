@@ -67,7 +67,7 @@ export class Header {
     if (document.body.dataset.track !== ts.key) {
       const first = !this.seenTrack;
       document.body.dataset.track = ts.key;
-      if (!first) retrigger($('track-pill'), 'enter');
+      if (!first) { retrigger($('track-pill'), 'enter'); this.store.flagShow?.(ts.key, ts.label); }
       this.seenTrack = true;
     }
     if ($('track-label').textContent !== ts.label) $('track-label').textContent = ts.label;
@@ -102,10 +102,12 @@ export class Header {
       $('lc-bar').style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`;
       this.clockMode = false;
     } else {
-      const part = kind === 'quali' ? `Q${Number(s.TimingData?.SessionPart) || 1} · ` : '';
+      const sprint = /sprint/i.test(s.SessionInfo?.Name || '');
+      const part = kind === 'quali' ? `${sprint ? 'SQ' : 'Q'}${Number(s.TimingData?.SessionPart) || 1} · ` : '';
       $('lc-label').textContent = this.frozen ? `${part}stopped` : kind === 'quali' ? `${part}left` : 'Time left';
       this.clockMode = true;
-      this.sessionLen = { practice: 3600, quali: [1080, 900, 720][(Number(s.TimingData?.SessionPart) || 1) - 1] }[kind] || 3600;
+      // Qualifying parts: 18/15/12 min; sprint qualifying: 12/10/8 min.
+      this.sessionLen = { practice: 3600, quali: (sprint ? [720, 600, 480] : [1080, 900, 720])[(Number(s.TimingData?.SessionPart) || 1) - 1] }[kind] || 3600;
     }
 
     const w = s.WeatherData;

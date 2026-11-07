@@ -16,6 +16,7 @@ import { Radar } from './views/radar.js';
 import { DriverPanel } from './views/driver.js';
 import { Pace } from './views/pace.js';
 import { LapHistory } from './history.js';
+import { FlagShow } from './views/flagshow.js';
 import { DriverSheet } from './views/sheet.js';
 import { Settings } from './views/settings.js';
 
@@ -111,6 +112,8 @@ const history = new LapHistory();
 store.history = history;
 store.map = map;
 const driverPanel = new DriverPanel(store);
+const flags = new FlagShow(store);
+store.flagShow = (key, label) => flags.show(key, label);
 const pace = new Pace(store);
 new Settings(store);
 const layout = new Layout(store);
@@ -170,6 +173,7 @@ function openLayoutPop(btn) {
     <div class="presets-grid">${Object.entries(PRESETS).map(([k, p]) => `<button class="preset${cur === k ? ' on' : ''}" data-preset="${k}">${thumb(p)}<b>${esc(p.name)}</b><span>${esc(p.desc)}</span></button>`).join('')}</div>
     <div class="pop-sec"><div class="pop-k">Text size</div><div class="seg">${['compact', 'comfortable', 'large'].map((d) => `<button data-density="${d}" class="${density === d ? 'on' : ''}">${d === 'large' ? 'Large (sofa)' : d[0].toUpperCase() + d.slice(1)}</button>`).join('')}</div></div>
     <div class="pop-sec"><div class="pop-k">Theme</div><div class="seg">${[['dark', 'Dark'], ['paper', 'Paper (light)']].map(([k, n]) => `<button data-theme="${k}" class="${document.body.dataset.theme === k ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+    <div class="pop-sec"><div class="pop-k">Flag animations</div><div class="seg">${[['1', 'On'], ['0', 'Off']].map(([v, n]) => `<button data-flaganim="${v}" class="${(flags.enabled ? '1' : '0') === v ? 'on' : ''}">${n}</button>`).join('')}</div></div>
     <div class="pop-sec"><div class="pop-k">Accent</div><div class="swatches">${ACCENTS.map((a) => `<button data-accent="${a}" class="sw sw-${a}${accent === a ? ' on' : ''}" title="${a}"></button>`).join('')}</div></div>
     <div class="pop-sec"><div class="pop-k">Panels</div><div class="chips">${Object.entries(WIDGETS).map(([id, w]) => `<button data-panel="${id}" class="pchip${layout.placed(id) ? ' on' : ''}">${w.icon}${esc(w.title)}</button>`).join('')}</div></div>
     <div class="pop-foot"><button class="btn" data-reset>Reset to default</button></div>`;
@@ -184,6 +188,7 @@ function openLayoutPop(btn) {
     else if (b.dataset.density) store.setLook({ density: b.dataset.density });
     else if (b.dataset.accent) store.setLook({ accent: b.dataset.accent });
     else if (b.dataset.theme) store.setLook({ theme: b.dataset.theme });
+    else if (b.dataset.flaganim) { flags.setEnabled(b.dataset.flaganim === '1'); if (flags.enabled) flags.show('green', 'This is how flag changes will look'); }
     else if (b.dataset.panel) layout.show(b.dataset.panel, !layout.placed(b.dataset.panel));
     else if (b.hasAttribute('data-reset')) { localStorage.removeItem('layout'); localStorage.removeItem('towerCols'); store.setLook({ density: 'comfortable', accent: 'mono', theme: 'dark' }); layout.applyPreset(window.innerWidth >= 1700 ? 'engineer' : 'pitwall'); }
     openLayoutPop(btn);
