@@ -57,6 +57,7 @@ export class Layout {
       this.tools[id] = this.widgets[id].querySelector('.w-tools');
     }
     this.dots = new Set();
+    this.focus = WIDGETS[localStorage.getItem('focus')] ? localStorage.getItem('focus') : null;
     this.mq = matchMedia('(max-width: 900px)');
     this.mobileTab = localStorage.getItem('mtab') || 'tower';
     this.state = this.#load();
@@ -82,6 +83,8 @@ export class Layout {
   applyPreset(key) {
     const p = PRESETS[key];
     this.state = { ...clone(p.layout), preset: key };
+    this.focus = null;
+    localStorage.removeItem('focus');
     if (p.density) this.store.setLook({ density: p.density });
     this.save();
     this.render();
@@ -89,9 +92,19 @@ export class Layout {
 
   placed(id) { return this.state.cols.some((c) => c.groups.some((g) => g.tabs.includes(id))); }
 
+  /** Show one panel on its own (null = back to the full layout). */
+  setFocus(id) {
+    this.focus = id && WIDGETS[id] ? id : null;
+    if (this.focus) localStorage.setItem('focus', this.focus); else localStorage.removeItem('focus');
+    if (this.focus) this.dots.delete(this.focus);
+    this.render();
+    this.store.dirty?.();
+  }
+
   /** Is the widget on screen right now? */
   visible(id) {
     if (this.mobile) return this.mobileTab === id;
+    if (this.focus) return this.focus === id;
     return this.state.cols.some((c) => c.groups.some((g) => (g.active || g.tabs[0]) === id));
   }
 
@@ -113,7 +126,9 @@ export class Layout {
     }
     this.root.innerHTML = '';
     this.menu.hidden = true;
+    document.body.classList.toggle('focused', !!this.focus && !this.mobile);
     if (this.mobile) this.#renderMobile();
+    else if (this.focus) this.#renderFocus();
     else this.state.cols.forEach((col, ci) => {
       if (ci > 0) this.root.append(this.#colResizer(ci));
       const colEl = div('col');
@@ -142,6 +157,35 @@ export class Layout {
     g.append(head, body);
     this.root.append(g);
     this.nav.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.w === id));
+  }
+
+  /** One panel fills the screen; its tab bar lists every panel so you can flip between them. */
+  #renderFocus() {
+    const id = this.focus;
+    const g = div('group focus');
+    const head = div('g-head');
+    const tabs = div('g-tabs');
+    for (const [wid, w] of Object.entries(WIDGETS)) {
+      const b = document.createElement('button');
+      b.className = `g-tab${wid === id ? ' active' : ''}`;
+      b.dataset.dot = wid;
+      b.title = w.title;
+      b.innerHTML = `${w.icon}<span>${esc(w.title)}</span>${wid === 'telemetry' ? LOCK : ''}`;
+      b.addEventListener('click', () => this.setFocus(wid));
+      tabs.append(b);
+    }
+    const tools = div('g-tools');
+    if (this.tools[id]) tools.append(this.tools[id]);
+    const back = document.createElement('button');
+    back.className = 'focus-exit';
+    back.title = 'Back to all panels (Esc)';
+    back.innerHTML = `${I('<path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>')}<span>All panels</span>`;
+    back.addEventListener('click', () => this.setFocus(null));
+    head.append(tabs, tools, back);
+    const body = div('g-body');
+    body.append(this.widgets[id]);
+    g.append(head, body);
+    this.root.append(g);
   }
 
   #buildNav() {
@@ -173,6 +217,7 @@ export class Layout {
       b.title = w.title;
       b.innerHTML = `${w.icon}<span>${esc(w.title)}</span>${id === 'telemetry' ? LOCK : ''}`;
       b.addEventListener('click', () => { g.active = id; this.dots.delete(id); this.save(); this.render(); this.store.dirty?.(); });
+      b.addEventListener('dblclick', () => this.setFocus(id));
       b.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; this.dragging = id; document.body.classList.add('dragging'); });
       b.addEventListener('dragend', () => { this.dragging = null; document.body.classList.remove('dragging'); this.root.querySelectorAll('.drop-hint').forEach((h) => h.remove()); });
       tabs.append(b);
@@ -184,7 +229,12 @@ export class Layout {
     menuBtn.title = 'Panel options';
     menuBtn.innerHTML = I('<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>');
     menuBtn.addEventListener('click', (e) => { e.stopPropagation(); this.#openMenu(menuBtn, g); });
-    head.append(tabs, tools, menuBtn);
+    const focusBtn = document.createElement('button');
+    focusBtn.className = 'g-menu g-focus';
+    focusBtn.title = 'Show only this panel (or double-click its tab)';
+    focusBtn.innerHTML = I('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>');
+    focusBtn.addEventListener('click', () => this.setFocus(g.active));
+    head.append(tabs, tools, focusBtn, menuBtn);
     const body = div('g-body');
     body.append(this.widgets[g.active]);
     el.append(head, body);
@@ -276,6 +326,7 @@ export class Layout {
     const hidden = Object.keys(WIDGETS).filter((w) => !this.placed(w));
     this.menu.innerHTML = `
       <div class="menu-label">${esc(WIDGETS[id].title)}</div>
+      <button data-act="focus">${I('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>')}Show only this panel</button>
       <button data-act="right">${I('<rect x="3" y="4" width="8" height="16" rx="2" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M15 12h6M18 9v6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>')}Move to a new column</button>
       <button data-act="below">${I('<rect x="4" y="3" width="16" height="8" rx="2" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M12 15v6M9 18h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>')}Split below</button>
       ${this.state.cols.reduce((n, c) => n + c.groups.reduce((m, x) => m + x.tabs.length, 0), 0) > 1 ? `<button data-act="close">${I('<path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>')}Hide this panel</button>` : ''}
@@ -292,6 +343,7 @@ export class Layout {
       this.menu.hidden = true;
       if (b.dataset.add) { g.tabs.push(b.dataset.add); g.active = b.dataset.add; this.state.preset = null; this.save(); this.render(); this.store.dirty?.(); return; }
       const act = b.dataset.act;
+      if (act === 'focus') { this.setFocus(id); return; }
       if (act === 'right' || act === 'below') {
         if (g.tabs.length === 1 && act === 'below') return;
         this.move(id, col, g, act);

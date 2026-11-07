@@ -96,6 +96,7 @@ const layout = new Layout(store);
 const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, sheet];
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && layout.focus && document.querySelectorAll('.popover:not([hidden]), .menu:not([hidden]), dialog[open]').length === 0) layout.setFocus(null);
   if (e.key === 'Escape') { sheet.close(); for (const id of ['delay-pop', 'layout-pop', 'cols-pop', 'panel-menu']) document.getElementById(id).hidden = true; }
 });
 
