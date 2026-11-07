@@ -15,7 +15,24 @@ export class Replayer extends EventEmitter {
   start() {
     const lines = fs.readFileSync(this.file, 'utf8').split('\n').filter(Boolean);
     this.entries = [];
-    for (const l of lines) { try { this.entries.push(JSON.parse(l)); } catch { /* partial last line */ } }
+    // Recordings made by two programs at once contain every message twice;
+    // drop exact repeats (same topic, feed timestamp and payload).
+    const recent = new Set();
+    const order = [];
+    for (const l of lines) {
+      let e;
+      try { e = JSON.parse(l); } catch { continue; /* partial last line */ }
+      if (e.type === 'feed') {
+        const k = `${e.topic}|${e.ts}|${JSON.stringify(e.data)}`;
+        if (recent.has(k)) continue;
+        recent.add(k); order.push(k);
+        if (order.length > 400) recent.delete(order.shift());
+      } else if (e.type === 'init') {
+        const prev = this.entries.findLast((x) => x.type === 'init');
+        if (prev && e.t - prev.t < 3000) continue; // duplicate full-state snapshot
+      }
+      this.entries.push(e);
+    }
     const first = this.entries.findIndex((e) => e.type === 'init');
     if (first < 0) throw new Error('recording has no initial state');
     this.entries = this.entries.slice(first);
