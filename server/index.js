@@ -50,6 +50,8 @@ function latestRecording() {
 }
 
 function startSource() {
+  // Only live sessions are recorded (a demo or replay must never be saved as a session).
+  if (mode !== 'live' && recorder) { recorder.close(); recorder = null; }
   if (mode === 'demo') {
     source = new Simulator({ f1tv: sourceOpts.f1tv, speed: sourceOpts.speed });
   } else if (mode === 'replay') {
@@ -83,6 +85,7 @@ async function switchSource(newMode, opts = {}) {
 
 // Remaining sessions this season, from the free Jolpica (Ergast) API; cached 6h.
 let scheduleCache = { at: 0, data: null };
+let radarCache = { at: 0, data: null };
 async function schedule() {
   if (scheduleCache.data && Date.now() - scheduleCache.at < 6 * 3600e3) return scheduleCache.data;
   const r = await fetch('https://api.jolpi.ca/ergast/f1/current.json', { headers: { 'user-agent': 'pitwall-dashboard' } });
@@ -95,7 +98,12 @@ async function schedule() {
     sessions.push({ race: race.raceName, name: 'Race', start: `${race.date}T${race.time || '00:00:00Z'}` });
   }
   sessions.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
-  scheduleCache = { at: Date.now(), data: { sessions } };
+  // Circuit coordinates, for the weather radar.
+  const raceList = races.map((r) => ({
+    name: r.raceName, date: r.date, circuit: r.Circuit?.circuitName, locality: r.Circuit?.Location?.locality,
+    country: r.Circuit?.Location?.country, lat: Number(r.Circuit?.Location?.lat), lon: Number(r.Circuit?.Location?.long),
+  }));
+  scheduleCache = { at: Date.now(), data: { sessions, races: raceList } };
   return scheduleCache.data;
 }
 
@@ -250,6 +258,14 @@ const server = http.createServer(async (req, res) => {
         .map((f) => { const st = fs.statSync(path.join(recordingsDir, f)); return { name: f, size: st.size, mtime: st.mtimeMs }; })
         .sort((a, b) => b.mtime - a.mtime) : [];
       return sendJson(res, 200, { files });
+    }
+    if (url.pathname === '/api/radar') {
+      // RainViewer's list of radar frames (last ~2 hours), cached for 2 minutes.
+      if (!radarCache.data || Date.now() - radarCache.at > 120000) {
+        const r = await fetch('https://api.rainviewer.com/public/weather-maps.json', { headers: { 'user-agent': 'pitwall-dashboard' } }).catch(() => null);
+        if (r?.ok) radarCache = { at: Date.now(), data: await r.json() };
+      }
+      return radarCache.data ? sendJson(res, 200, radarCache.data) : sendJson(res, 502, { error: 'radar unavailable' });
     }
     if (url.pathname === '/api/schedule') {
       try { return sendJson(res, 200, await schedule()); } catch (e) { return sendJson(res, 200, { sessions: [], error: e.message }); }
