@@ -59,7 +59,7 @@ export class Battles {
       for (let k = h.length - 1; k >= 0 && h[k].iv <= RANGE + 0.3; k--) since = h[k].lap;
       battles.push({ a, b, iv, trend, pos: i + 1, spark: recent.slice(-16).map((x) => x.iv), laps: since ? Math.max(0, (Number(s.LapCount?.CurrentLap) || since) - since) : 0 });
     }
-    const key = JSON.stringify(battles.map((x) => [x.a, x.b, x.iv, Math.sign(Math.round(x.trend * 20)), x.laps, x.spark.length]));
+    const key = JSON.stringify([this.store.selected, battles.map((x) => [x.a, x.b, x.iv, Math.sign(Math.round(x.trend * 20)), x.laps, x.spark.length])]);
     if (key === this.key) return;
     this.key = key;
     if (!battles.length) { this.root.innerHTML = '<div class="feed-empty"><b>No close fights right now.</b><br>Cars within 1.5 s of the car ahead appear here.</div>'; return; }
@@ -67,7 +67,7 @@ export class Battles {
     const car = (num, cls) => {
       const d = dl[num] || {};
       const st = currentStint(s, num);
-      return `<div class="b-car ${cls}" style="--tc:${teamColor(d)}" data-num="${esc(num)}">
+      return `<div class="b-car ${cls}" style="--tc:${teamColor(d)}" data-num="${esc(num)}" data-select="${esc(num)}" title="Follow ${esc(d.Tla || num)}">
         <i class="b-bar"></i><div class="b-who"><b>${esc(d.Tla || num)}</b><span>${esc(d.LastName || '')}</span></div>
         ${st ? `<span class="tyre sm ${esc(st.Compound)}">${compoundLetter(st.Compound)}</span>` : ''}
       </div>`;
@@ -80,7 +80,8 @@ export class Battles {
       const changed = before.has(pair) && before.get(pair) !== x.iv;
       const attack = x.iv < 1.0;
       const tr = x.trend < -0.04 ? ['closing', `▼ ${Math.abs(x.trend).toFixed(2)}s`] : x.trend > 0.04 ? ['opening', `▲ ${x.trend.toFixed(2)}s`] : ['steady', 'steady'];
-      return `<div class="battle${attack ? ' attack' : ''}${isNew ? ' new' : ''}">
+      const mine = this.store.selected && (x.a === this.store.selected || x.b === this.store.selected);
+      return `<div class="battle${attack ? ' attack' : ''}${isNew ? ' new' : ''}${mine ? ' mine' : ''}">
         <div class="b-head"><span class="b-pos">P${x.pos - 1} · P${x.pos}</span>${attack ? '<span class="b-tag">Within 1 s</span>' : ''}${x.laps ? `<span class="b-laps">${x.laps} lap${x.laps === 1 ? '' : 's'}</span>` : ''}</div>
         <div class="b-row">
           ${car(x.a, 'ahead')}

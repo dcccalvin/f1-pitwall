@@ -68,6 +68,7 @@ export class TrackMap {
     const tt = c.trackPositionTime || pts.map((_, i) => i);
     const lapT = tt.at(-1) || 1;
     this.circuit = { raw: c, pts, rot, cx, cy, tt, lapT, size };
+    this.store.circuit = c; // pit-loss figures for the driver panel
 
     const root = svg('svg', { viewBox: `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`, preserveAspectRatio: 'xMidYMid meet' });
     const d = `M${pts.map((p) => `${p.x.toFixed(0)},${p.y.toFixed(0)}`).join('L')}Z`;

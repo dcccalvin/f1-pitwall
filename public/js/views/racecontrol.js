@@ -41,7 +41,8 @@ export class RaceControl {
 
   update() {
     const msgs = this.list();
-    if (msgs.length === this.count) return;
+    if (msgs.length === this.count && this.drawnSel === this.store.selected) return;
+    this.drawnSel = this.store.selected;
     const fresh = this.count >= 0 ? msgs.length - this.count : 0;
     this.count = msgs.length;
     const off = this.store.state.SessionInfo?.GmtOffset;
@@ -49,9 +50,10 @@ export class RaceControl {
     this.root.innerHTML = msgs.slice().reverse().map((m, i) => {
       const [cls, label] = classify(m);
       const time = m.Utc ? sessionLocalTime(m.Utc, off) : '';
-      return `<div class="rc${i < fresh ? ' fresh' : ''}">
+      const mine = this.store.selected && new RegExp(String.raw`\b${this.store.selected} \([A-Z]{3}\)`).test(m.Message || '');
+      return `<div class="rc${i < fresh ? ' fresh' : ''}${mine ? ' mine' : ''}">
         <div class="rc-time">${m.Lap ? `<b>Lap ${esc(m.Lap)}</b>` : ''}${esc(time)}</div>
-        <div class="rc-msg"><span class="chip ${cls}">${esc(label)}</span>${esc(m.Message)}</div>
+        <div class="rc-msg"><span class="chip ${cls}">${esc(label)}</span>${esc(m.Message).replace(/\b(\d{1,2}) \(([A-Z]{3})\)/g, '<span class="rc-car" data-select="$1" title="Follow $2">$1 ($2)</span>')}</div>
       </div>`;
     }).join('');
     if (fresh > 0) this.store.notify('control');

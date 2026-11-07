@@ -24,6 +24,7 @@ export class Moments {
   }
 
   reset(state, at) {
+    this.live = false; setTimeout(() => { this.live = true; }, 1500); // no pop-ups for the catch-up burst
     this.items = this.items.filter((m) => m.t <= at);
     this.prev.clear();
     for (const [num, l] of Object.entries(state?.TimingData?.Lines || {})) {
@@ -39,6 +40,13 @@ export class Moments {
   #add(t, state, m) {
     this.items.push({ ...m, t, id: ++this.seq, lap: state.LapCount?.CurrentLap, utc: new Date(t).toISOString() });
     if (this.items.length > 120) this.items.shift();
+    // Pop-up for the driver you're following.
+    const sel = this.store.selected;
+    if (this.store.alerts && sel && (m.num === sel || m.d2?.num === sel) && this.live) {
+      const plain = String(m.text).replace(/<[^>]+>/g, '');
+      const who = m.d ? (m.kind === 'pass' ? `${m.d.tla} passes ${m.d2.tla} ` : `${m.d.tla} `) : '';
+      this.store.toast(`${who}${plain}`, m.kind === 'out' || m.kind === 'pen' ? 'red' : 'driver', () => this.store.select(sel, { reveal: true, toggle: false }));
+    }
   }
 
   onMessage(t, topic, data, state) {
@@ -115,7 +123,8 @@ export class Moments {
   }
 
   update() {
-    if (this.drawn === this.seq && this.items.length) return;
+    if (this.drawn === this.seq && this.items.length && this.drawnSel === this.store.selected) return;
+    this.drawnSel = this.store.selected;
     const fresh = this.drawn >= 0 ? this.items.filter((m) => m.id > this.drawn).length : 0;
     this.drawn = this.seq;
     const off = this.store.state.SessionInfo?.GmtOffset;
@@ -123,14 +132,15 @@ export class Moments {
       this.root.innerHTML = '<div class="feed-empty"><b>Nothing yet.</b><br>Overtakes, pit stops, fastest laps and flags will appear here as they happen.</div>';
       return;
     }
-    const chip = (d) => `<span class="dchip" style="--tc:${d.color}">${esc(d.tla)}</span>`;
+    const chip = (d) => `<span class="dchip" style="--tc:${d.color}" data-select="${esc(d.num)}" title="Follow ${esc(d.tla)}">${esc(d.tla)}</span>`;
     this.root.innerHTML = this.items.slice().reverse().map((m, i) => {
       let body = '';
       if (m.kind === 'pass') body = `${chip(m.d)} passes ${chip(m.d2)} ${m.text}`;
       else if (m.kind === 'pit') body = `${chip(m.d)} ${m.text}${m.tyre ? ` · on ${esc(m.tyre)}` : ''}${m.lane ? ` · lane <b class="num">${esc(m.lane)}s</b>` : ''}`;
       else if (m.d) body = `${chip(m.d)} ${m.text}`;
       else body = m.text;
-      return `<div class="moment ${m.cls}${i < fresh ? ' fresh' : ''}">
+      const mine = this.store.selected && (m.num === this.store.selected || m.d2?.num === this.store.selected);
+      return `<div class="moment ${m.cls}${i < fresh ? ' fresh' : ''}${mine ? ' mine' : ''}">
         <span class="m-ico">${ICON[m.kind] || ICON.flag}</span>
         <div class="m-body">${body}</div>
         <div class="m-time">${m.lap ? `L${esc(m.lap)} · ` : ''}${esc(sessionLocalTime(m.utc, off).slice(0, 5))}</div>

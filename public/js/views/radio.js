@@ -158,7 +158,8 @@ export class TeamRadio {
 
   update() {
     const caps = this.#captures();
-    if (caps.length === this.count) return;
+    if (caps.length === this.count && this.drawnSel === this.store.selected) return;
+    this.drawnSel = this.store.selected;
     const fresh = this.count >= 0 ? caps.length - this.count : 0;
     this.count = caps.length;
     const dl = this.store.state.DriverList || {};
@@ -168,9 +169,10 @@ export class TeamRadio {
     this.root.innerHTML = caps.slice().reverse().map((c, i) => {
       const d = dl[c.RacingNumber] || {};
       const tag = ctx(recordedUtc(c.Path, off) || c.Utc);
-      return `<div class="clip${i < fresh ? ' fresh' : ''}" data-path="${esc(c.Path)}" style="--tc:${teamColor(d)}">
+      const mine = String(c.RacingNumber) === String(this.store.selected);
+      return `<div class="clip${i < fresh ? ' fresh' : ''}${mine ? ' mine' : ''}" data-path="${esc(c.Path)}" style="--tc:${teamColor(d)}">
         <button class="play" aria-label="Play">${PLAY}</button>
-        <div><div class="clip-who"><b>${esc(d.Tla || c.RacingNumber)}</b>${tag ? `<em class="clip-tag ${tag[0]}" title="What was happening when this clip was recorded">${tag[1]}</em>` : ''}<span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div><div class="clip-bar"><i></i></div></div>
+        <div><div class="clip-who"><b data-select="${esc(c.RacingNumber)}" title="Follow ${esc(d.Tla || c.RacingNumber)}">${esc(d.Tla || c.RacingNumber)}</b>${tag ? `<em class="clip-tag ${tag[0]}" title="What was happening when this clip was recorded">${tag[1]}</em>` : ''}<span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div><div class="clip-bar"><i></i></div></div>
         <div class="clip-time" title="Recorded at (track time)">${esc(c.Utc ? sessionLocalTime(c.Utc, off) : '')}</div>
       </div>`;
     }).join('');
@@ -179,9 +181,15 @@ export class TeamRadio {
   }
 
   onMessage(t, topic, data) {
-    if (topic !== 'TeamRadio' || !this.auto.checked) return;
+    if (topic !== 'TeamRadio') return;
     const caps = Array.isArray(data?.Captures) ? data.Captures : Object.values(data?.Captures || {});
     const last = caps.filter(Boolean).at(-1);
+    const sel = this.store.selected;
+    if (last && sel && this.store.alerts && String(last.RacingNumber) === String(sel)) {
+      const tla = this.store.state.DriverList?.[sel]?.Tla || sel;
+      this.store.toast(`New team radio from ${tla} · click to play`, 'driver', () => this.toggle(last.Path));
+    }
+    if (!this.auto.checked) return;
     if (last && (this.audio.paused || !this.playing)) setTimeout(() => this.toggle(last.Path), 300);
   }
 }
