@@ -329,6 +329,9 @@ wss.on('connection', (ws) => {
   ws.on('close', () => clients.delete(c));
 });
 
+// Every 5 s tell each screen when F1 data last arrived, so it can warn about silence.
+setInterval(() => broadcast({ type: "ping", serverNow: Date.now(), lastDataAt: source?.lastDataAt || null, mode }), 5000);
+
 // Stream each screen the updates that are now "due" for its delay.
 setInterval(() => {
   const now = Date.now();
