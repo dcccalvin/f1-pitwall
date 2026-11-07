@@ -61,7 +61,7 @@ Each screen keeps its own delay, so the laptop and the phone can follow differen
 
 ## Make it yours
 
-- **Layout** (top bar): presets (Pit wall, Race engineer, Timing focus, Map focus, Sofa), text size (Compact / Comfortable / Large), accent colour, and which panels are shown.
+- **Layout** (top bar): presets (Pit wall, Race engineer, Timing focus, Map focus, Sofa), text size (Compact / Comfortable / Large), Dark or Paper (light) theme, accent colour, and which panels are shown.
 - **Drag panel tabs** onto another panel's tab bar to group them, or onto an edge to split into a new row or column.
 - **Drag the gaps** between panels to resize. Double-click a column gap to make the columns equal.
 - **Columns** (timing tower): choose which columns to show. Columns auto-hide when the panel gets narrow, and rows stretch to fit every car.
