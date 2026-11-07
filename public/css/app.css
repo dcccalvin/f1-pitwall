@@ -52,14 +52,14 @@ body[data-track^="vsc"] .topbar::after, body[data-track="red"] .topbar::after { 
 .brand svg { width: 18px; height: 18px; }
 .brand span { font-size: 14px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 
-.event { min-width: 0; padding-left: 20px; border-left: var(--rule) solid var(--line); }
+.event { flex: none; max-width: 280px; min-width: 0; padding-left: 20px; border-left: var(--rule) solid var(--line); }
 .event-top { display: flex; align-items: center; gap: 7px; color: var(--text-3); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; }
 .event-top #event-name { overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
 .cc { font-weight: 700; color: var(--text-2); letter-spacing: .04em; }
 .session-name { font-size: 18px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; white-space: nowrap; display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .mode-badge { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 5px; border: var(--rule) solid var(--line-3); color: var(--text-2); border-radius: 2px; }
 
-.lapclock { min-width: 120px; }
+.lapclock { flex: none; min-width: 120px; }
 .lc-row { display: flex; align-items: baseline; gap: 8px; }
 .lc-label { color: var(--text-3); font-size: var(--fs-xs); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
 .lc-value { display: inline-block; font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -715,4 +715,13 @@ body[data-track="red"] .status-pill .flagicon { animation: beacon 1.1s var(--eas
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
+}
+
+/* Header on narrower laptops: shrink long status texts with "…" instead of overlapping. */
+.brand, .tb-btn, .delay-btn, .icon-btn, .conn { flex: none; }
+.status-pill, .wet-chip { flex: 0 1 auto; min-width: 34px; overflow: hidden; }
+.status-pill #track-label, .wet-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1440px) {
+  .topbar { gap: 14px; }
+  .weather, .data-badge { display: none; }
 }
