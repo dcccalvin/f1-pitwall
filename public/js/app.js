@@ -46,9 +46,14 @@ const store = {
     dirty.add('*');
   },
 
-  setLook({ density, accent }) {
+  setLook({ density, accent, theme }) {
     if (density) { document.body.dataset.density = density; localStorage.setItem('density', density); }
     if (accent) { document.body.dataset.accent = accent; localStorage.setItem('accent', accent); }
+    if (theme) {
+      document.body.dataset.theme = theme;
+      localStorage.setItem('theme', theme);
+      document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.body).getPropertyValue('--panel').trim();
+    }
     tower.colKey = '';
     dirty.add('*');
   },
@@ -67,8 +72,11 @@ const store = {
   onLayout() { dirty.add('*'); },
 };
 
+const ACCENTS = ['mono', 'blue', 'orange', 'lime'];
 document.body.dataset.density = localStorage.getItem('density') || 'comfortable';
-document.body.dataset.accent = localStorage.getItem('accent') || 'cyan';
+document.body.dataset.accent = ACCENTS.includes(localStorage.getItem('accent')) ? localStorage.getItem('accent') : 'mono';
+document.body.dataset.theme = localStorage.getItem('theme') === 'paper' ? 'paper' : 'dark';
+document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.body).getPropertyValue('--panel').trim();
 
 const estimated = new EstimatedTracker();
 const gps = new GpsTracker();
@@ -114,7 +122,8 @@ function openLayoutPop(btn) {
     <p class="pop-help">Pick a starting point, then drag panel tabs to rearrange: drop on a tab bar to group, on an edge to split. Drag the gaps between panels to resize.</p>
     <div class="presets-grid">${Object.entries(PRESETS).map(([k, p]) => `<button class="preset${cur === k ? ' on' : ''}" data-preset="${k}">${thumb(p)}<b>${esc(p.name)}</b><span>${esc(p.desc)}</span></button>`).join('')}</div>
     <div class="pop-sec"><div class="pop-k">Text size</div><div class="seg">${['compact', 'comfortable', 'large'].map((d) => `<button data-density="${d}" class="${density === d ? 'on' : ''}">${d === 'large' ? 'Large (sofa)' : d[0].toUpperCase() + d.slice(1)}</button>`).join('')}</div></div>
-    <div class="pop-sec"><div class="pop-k">Accent</div><div class="swatches">${['cyan', 'violet', 'lime', 'rose', 'ice'].map((a) => `<button data-accent="${a}" class="sw sw-${a}${accent === a ? ' on' : ''}" title="${a}"></button>`).join('')}</div></div>
+    <div class="pop-sec"><div class="pop-k">Theme</div><div class="seg">${[['dark', 'Dark'], ['paper', 'Paper (light)']].map(([k, n]) => `<button data-theme="${k}" class="${document.body.dataset.theme === k ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+    <div class="pop-sec"><div class="pop-k">Accent</div><div class="swatches">${ACCENTS.map((a) => `<button data-accent="${a}" class="sw sw-${a}${accent === a ? ' on' : ''}" title="${a}"></button>`).join('')}</div></div>
     <div class="pop-sec"><div class="pop-k">Panels</div><div class="chips">${Object.entries(WIDGETS).map(([id, w]) => `<button data-panel="${id}" class="pchip${layout.placed(id) ? ' on' : ''}">${w.icon}${esc(w.title)}</button>`).join('')}</div></div>
     <div class="pop-foot"><button class="btn" data-reset>Reset to default</button></div>`;
   const r = btn.getBoundingClientRect();
@@ -127,8 +136,9 @@ function openLayoutPop(btn) {
     if (b.dataset.preset) layout.applyPreset(b.dataset.preset);
     else if (b.dataset.density) store.setLook({ density: b.dataset.density });
     else if (b.dataset.accent) store.setLook({ accent: b.dataset.accent });
+    else if (b.dataset.theme) store.setLook({ theme: b.dataset.theme });
     else if (b.dataset.panel) layout.show(b.dataset.panel, !layout.placed(b.dataset.panel));
-    else if (b.hasAttribute('data-reset')) { localStorage.removeItem('layout'); localStorage.removeItem('towerCols'); store.setLook({ density: 'comfortable', accent: 'cyan' }); layout.applyPreset(window.innerWidth >= 1700 ? 'engineer' : 'pitwall'); }
+    else if (b.hasAttribute('data-reset')) { localStorage.removeItem('layout'); localStorage.removeItem('towerCols'); store.setLook({ density: 'comfortable', accent: 'mono', theme: 'dark' }); layout.applyPreset(window.innerWidth >= 1700 ? 'engineer' : 'pitwall'); }
     openLayoutPop(btn);
   };
 }
