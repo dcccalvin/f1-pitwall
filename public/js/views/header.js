@@ -66,8 +66,9 @@ export class Header {
 
     const w = s.WeatherData;
     if (w) {
-      $('wx-air').textContent = `${Number(w.AirTemp).toFixed(1)}°`;
-      $('wx-track').textContent = `${Number(w.TrackTemp).toFixed(1)}°`;
+      // F1 occasionally sends a bogus 0.0 reading; keep the last good one.
+      if (Number(w.AirTemp) > 0) $('wx-air').textContent = `${Number(w.AirTemp).toFixed(1)}°`;
+      if (Number(w.TrackTemp) > 0) $('wx-track').textContent = `${Number(w.TrackTemp).toFixed(1)}°`;
       $('wx-hum').textContent = `${Math.round(Number(w.Humidity))}%`;
       $('wx-wind').textContent = `${Number(w.WindSpeed).toFixed(1)}`;
       // Wind direction is where it blows FROM; arrow points where it goes.
@@ -95,7 +96,11 @@ export class Header {
     let txt = '—', rem = null;
     if (c?.Remaining) {
       rem = parseClock(c.Remaining);
-      if (c.Extrapolating && c.Utc) rem -= (now - Date.parse(c.Utc)) / 1000;
+      // Live: count down from the feed's own timestamp. Replays: from when the
+      // clock message was played back (its original timestamp is in the past).
+      const seen = this.store.clockSeen;
+      const from = this.store.status?.mode === 'replay' && seen?.utc === c.Utc ? seen.t : Date.parse(c.Utc);
+      if (c.Extrapolating && from) rem -= (now - from) / 1000;
       rem = Math.max(0, rem);
       txt = fmtClock(rem);
     }

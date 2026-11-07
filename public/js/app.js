@@ -153,6 +153,7 @@ function onState(m) {
   map.reset(store.state);
   if (sessionChanged) { battles.reset(); moments.items = []; }
   moments.reset(store.state, m.at);
+  store.clockSeen = { utc: store.state.ExtrapolatedClock?.Utc, t: m.at };
   computeDerived();
   dirty.add('*');
 }
@@ -160,6 +161,7 @@ function onState(m) {
 function onMsgs(msgs) {
   for (const [t, topic, data] of msgs) {
     applyMessage(store.state, topic, data);
+    if (topic === 'ExtrapolatedClock') store.clockSeen = { utc: store.state.ExtrapolatedClock?.Utc, t };
     estimated.onMessage(t, topic, data, store.state);
     gps.onMessage(t, topic, data);
     telemetry.onMessage(t, topic, data);

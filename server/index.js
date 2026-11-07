@@ -53,7 +53,7 @@ function startSource() {
     source = new Simulator({ f1tv: sourceOpts.f1tv, speed: sourceOpts.speed });
   } else if (mode === 'replay') {
     const given = sourceOpts.file || argv.find((a, i) => !a.startsWith('--') && !['--speed', '--skip', '--port'].includes(argv[i - 1]));
-    const file = given ? path.resolve(recordingsDir, given) : latestRecording();
+    const file = !given ? latestRecording() : fs.existsSync(path.resolve(given)) ? path.resolve(given) : path.resolve(recordingsDir, given);
     if (!file || !fs.existsSync(file)) { console.error('No recording found. Record a live session first (npm start or npm run record).'); process.exit(1); }
     source = new Replayer(file, { speed: sourceOpts.speed, skipSeconds: sourceOpts.skip });
   } else {
