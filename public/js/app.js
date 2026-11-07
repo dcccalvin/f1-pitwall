@@ -13,6 +13,9 @@ import { Telemetry } from './views/telemetry.js';
 import { Battles } from './views/battles.js';
 import { Moments } from './views/moments.js';
 import { Radar } from './views/radar.js';
+import { DriverPanel } from './views/driver.js';
+import { Pace } from './views/pace.js';
+import { LapHistory } from './history.js';
 import { DriverSheet } from './views/sheet.js';
 import { Settings } from './views/settings.js';
 
@@ -41,11 +44,22 @@ const store = {
   },
   sync(driver) { send({ type: 'sync', driver }); },
 
-  select(num, { open = false } = {}) {
-    this.selected = this.selected === num && !open ? null : num;
-    if (open) sheet.open(num);
+  /**
+   * Follow a driver everywhere (tower, map, telemetry, driver panel...).
+   * reveal: also bring the Driver panel to the front (double-click, or on a phone).
+   */
+  select(num, { open = false, reveal = false, toggle = true } = {}) {
+    const next = num == null ? null : String(num);
+    this.selected = toggle && this.selected === next && !open && !reveal ? null : next;
+    if (this.selected) localStorage.setItem('selected', this.selected); else localStorage.removeItem('selected');
+    if (this.selected && (open || reveal || layout.mobile)) layout.reveal('driver');
+    if (!this.selected && this.map?.follow) this.map.setFollow(false);
     dirty.add('*');
   },
+
+  alerts: localStorage.getItem('driverAlerts') !== '0',
+  setAlerts(on) { this.alerts = !!on; localStorage.setItem('driverAlerts', this.alerts ? '1' : '0'); },
+  playRadio(path) { radio.toggle(path); },
 
   setLook({ density, accent, theme }) {
     if (density) { document.body.dataset.density = density; localStorage.setItem('density', density); }
@@ -59,10 +73,11 @@ const store = {
     dirty.add('*');
   },
 
-  toast(text, cls = '') {
+  toast(text, cls = '', onClick = null) {
     const t = document.createElement('div');
-    t.className = `toast ${cls}`;
+    t.className = `toast ${cls}${onClick ? ' clickable' : ''}`;
     t.textContent = text;
+    if (onClick) t.addEventListener('click', () => { onClick(); t.remove(); });
     document.getElementById('toasts').append(t);
     setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 280); }, cls ? 9000 : 5000);
   },
@@ -92,14 +107,43 @@ const battles = new Battles(store);
 const moments = new Moments(store);
 const radar = new Radar(store);
 const sheet = new DriverSheet(store);
+const history = new LapHistory();
+store.history = history;
+store.map = map;
+const driverPanel = new DriverPanel(store);
+const pace = new Pace(store);
 new Settings(store);
 const layout = new Layout(store);
 
-const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, radar, sheet];
+const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, radar, driverPanel, pace, sheet];
+store.selected = localStorage.getItem('selected') || null;
+
+// Click a driver anywhere to follow them; double-click to open the Driver panel.
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-select]');
+  if (t) { e.stopPropagation(); store.select(t.dataset.select, { toggle: false }); }
+}, true);
+document.addEventListener('dblclick', (e) => {
+  const t = e.target.closest('[data-select], .tw-row, .car-dot');
+  const num = t?.dataset.select || t?.dataset.num;
+  if (num) store.select(num, { reveal: true, toggle: false });
+});
+// Up / down arrows step through the field when following a driver.
+document.addEventListener('keydown', (e) => {
+  if (!store.selected || e.target.closest('input, textarea, select') || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+  const order = Object.entries(store.state.TimingData?.Lines || {}).filter(([, l]) => l?.Position).sort((a, b) => a[1].Position - b[1].Position).map(([n]) => n);
+  const i = order.indexOf(store.selected);
+  const next = order[i + (e.key === 'ArrowUp' ? -1 : 1)];
+  if (next) { e.preventDefault(); store.select(next, { toggle: false }); }
+});
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && layout.focus && document.querySelectorAll('.popover:not([hidden]), .menu:not([hidden]), dialog[open]').length === 0) layout.setFocus(null);
-  if (e.key === 'Escape') { sheet.close(); for (const id of ['delay-pop', 'layout-pop', 'cols-pop', 'panel-menu']) document.getElementById(id).hidden = true; }
+  if (e.key !== 'Escape') return;
+  // One thing per press: close a menu, else leave single-panel mode, else stop following.
+  const open = document.querySelector('.popover:not([hidden]), .menu:not([hidden]), dialog[open], .sheet:not([hidden])');
+  if (open) { sheet.close(); for (const id of ['delay-pop', 'layout-pop', 'cols-pop', 'panel-menu']) document.getElementById(id).hidden = true; }
+  else if (layout.focus) layout.setFocus(null);
+  else if (store.selected) store.select(null);
 });
 
 // ------------------------------------------------------------------ layout popover
@@ -166,6 +210,8 @@ function onState(m) {
   map.reset(store.state);
   if (sessionChanged) { battles.reset(); moments.items = []; }
   moments.reset(store.state, m.at);
+  history.onMessage(m.at, '__init', store.state, store.state);
+  fetch('/api/history').then((r) => r.json()).then((snap) => { history.load(snap); dirty.add('*'); }).catch(() => {});
   store.clockSeen = { utc: store.state.ExtrapolatedClock?.Utc, t: m.at };
   computeDerived();
   dirty.add('*');
@@ -183,6 +229,7 @@ function onMsgs(msgs) {
     radio.onMessage(t, topic, data);
     battles.onMessage(t, topic, data, store.state);
     moments.onMessage(t, topic, data, store.state);
+    history.onMessage(t, topic, data, store.state);
     dirty.add(topic);
   }
   computeDerived();
