@@ -14,6 +14,12 @@ It connects to F1's live timing feed from your own computer and shows it as a we
 - Battles: every car within 1.5 s of the car ahead, with closing/opening trend and an "attack range" flag under 1 s
 - Moments: overtakes, fastest laps, pit stops, retirements, flags and penalties as they happen
 - Race control messages, team radio (with playback), tyre strategy chart, weather, track status, lap counter / session clock
+- **Driver focus**: click a driver anywhere (tower, map, battles, radio, moments, race control) to follow them. The Driver panel shows the gaps to the cars around them, last / best / ideal lap, tyres and stints, a lap-time chart, sectors, track-limit strikes, stewards' notes and their team radio. In qualifying it shows the live cut-off margin; in the race, where they would rejoin if they pitted now. Double-click a driver to open it, ↑ / ↓ steps through the field, Esc stops following. Optional pop-ups for that driver's pit stops, overtakes, fastest laps and radio.
+- **Follow on map**: zooms the track map onto the driver you're following
+- **Pace**: lap-time chart (and gap-to-leader chart in races) for your driver and the top five
+- **Weather radar**: the last two hours of rain around the circuit, with distance rings and wind
+- **Red flags**: the announced restart time with a countdown, plus rain / wet-track / low-grip notices from race control
+- **Stays up**: if the internet drops, a bar says so and Pit Wall reconnects by itself within seconds of it coming back
 
 **With an F1 TV subscription (Access plan is enough), switched on later**
 
