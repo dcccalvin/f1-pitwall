@@ -48,6 +48,7 @@ export class Replayer extends EventEmitter {
     for (; i < this.entries.length && this.entries[i].t <= startAt; i++) {
       const e = this.entries[i];
       applyMessage(state, e.type === 'init' ? INIT : e.topic, e.data);
+      this.emit('skip', e, state);
     }
     this.emit('status', { state: 'replay', detail: `${(this.speed !== 1 ? `${this.speed}× · ` : '')}${this.file.split(/[\\/]/).pop()}`, authenticated: !!state.CarData });
     if (state.SessionInfo) state.SessionInfo.Replay = true;

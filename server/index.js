@@ -16,7 +16,9 @@ import QRCode from 'qrcode';
 import { F1Feed } from './f1feed.js';
 import { Simulator } from './simulator.js';
 import { Replayer } from './replay.js';
-import { Recorder } from './recorder.js';
+import { Recorder, recordingPath } from './recorder.js';
+import { LapHistory } from '../public/js/history.js';
+import { applyMessage as applyMsg } from '../public/js/merge.js';
 import { Timeline, MAX_DELAY_S } from './timeline.js';
 import { loadConfig, saveConfig } from './config.js';
 import { INIT } from '../public/js/merge.js';
@@ -40,6 +42,7 @@ let timeline = new Timeline();
 let recorder = null;
 let source = null;
 let sourceStatus = { state: 'starting', detail: '' };
+const history = new LapHistory();
 let sourceOpts = { f1tv: flag('f1tv'), speed: Number(opt('speed', 1)), skip: Number(opt('skip', 0)), file: null };
 
 function latestRecording() {
@@ -64,9 +67,39 @@ function startSource() {
     recorder = flag('no-record') ? null : (recorder ?? new Recorder(recordingsDir));
   }
   source.on('status', (s) => { sourceStatus = s; console.log(`[source] ${s.state} ${s.detail || ''}`); broadcast({ type: 'status', status: statusPayload() }); });
-  source.on('init', (state) => { timeline.push(INIT, state); recorder?.init(state); });
-  source.on('feed', (topic, data, ts) => { timeline.push(topic, data); recorder?.feed(topic, data, ts); });
+  source.on('init', (state) => {
+    const fresh = state?.SessionInfo?.Key !== history.sessionKey;
+    timeline.push(INIT, state);
+    history.onMessage(Date.now(), '__init', state, timeline.state);
+    if (fresh && mode === 'live') backfillHistory(state);
+    recorder?.init(state);
+  });
+  source.on('feed', (topic, data, ts) => {
+    timeline.push(topic, data);
+    history.onMessage(Date.now(), topic, data, timeline.state);
+    recorder?.feed(topic, data, ts);
+  });
+  source.on('skip', (e, state) => history.onMessage(e.t, e.type === 'init' ? '__init' : e.topic, e.data, state));
   source.start();
+}
+
+/** After a restart mid-session, rebuild the lap history from this session's recording. */
+function backfillHistory(state) {
+  const file = recordingPath(recordingsDir, state);
+  if (!fs.existsSync(file)) return;
+  try {
+    const tmp = {};
+    let n = 0;
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      if (!line) continue;
+      let e;
+      try { e = JSON.parse(line); } catch { continue; }
+      if (e.type === 'init') { applyMsg(tmp, INIT, e.data); continue; }
+      applyMsg(tmp, e.topic, e.data);
+      if (e.topic === 'TimingData') { history.onMessage(e.t, e.topic, e.data, tmp); n++; }
+    }
+    console.log(`[history] rebuilt from recording (${n} timing messages)`);
+  } catch (e) { console.warn('[history] backfill failed:', e.message); }
 }
 
 /** Swap live / demo / replay without restarting; every screen gets the new state. */
@@ -75,6 +108,7 @@ async function switchSource(newMode, opts = {}) {
   mode = newMode;
   sourceOpts = { f1tv: !!opts.f1tv, speed: Number(opts.speed) || 1, skip: Number(opts.skip) || 0, file: opts.file || null };
   timeline = new Timeline();
+  history.reset(null);
   sourceStatus = { state: 'starting', detail: '' };
   startSource();
   for (const c of clients) {
@@ -259,6 +293,7 @@ const server = http.createServer(async (req, res) => {
         .sort((a, b) => b.mtime - a.mtime) : [];
       return sendJson(res, 200, { files });
     }
+    if (url.pathname === '/api/history') return sendJson(res, 200, history.snapshot());
     if (url.pathname === '/api/radar') {
       // RainViewer's list of radar frames (last ~2 hours), cached for 2 minutes.
       if (!radarCache.data || Date.now() - radarCache.at > 120000) {
