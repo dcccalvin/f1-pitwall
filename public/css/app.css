@@ -739,52 +739,58 @@ body[data-track="red"] .status-pill .flagicon { animation: beacon 1.1s var(--eas
 
 /* ================================================================ weather radar */
 .radar { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
-.rd-map { flex: 1; min-height: 160px; position: relative; overflow: hidden; background: var(--panel-2); }
-.rd-base, .rd-radar, .rd-frame { position: absolute; inset: 0; }
-.rd-map img { position: absolute; user-select: none; pointer-events: none; image-rendering: auto; }
-.rd-base img { filter: saturate(.6); }
-body[data-theme="dark"] .rd-base img { opacity: .9; }
-.rd-frame { opacity: 0; transition: opacity .35s var(--ease); }
-.rd-frame.on { opacity: .8; }
+.rd-map { flex: 1; min-height: 200px; position: relative; overflow: hidden; background: var(--panel-2); }
+.rd-base, .rd-radar, .rd-frame, .rd-labels { position: absolute; inset: 0; }
+.rd-labels { pointer-events: none; }
+.rd-map img { position: absolute; user-select: none; pointer-events: none; }
+.rd-frame { opacity: 0; transition: opacity .4s var(--ease); }
+.rd-frame.on { opacity: .82; }
+.rd-frame.on.ghost { opacity: .28; }
+.rd-fc { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .4s var(--ease); pointer-events: none; }
+.rd-fc.on { opacity: 1; }
 .rd-rings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .rd-rings circle { fill: none; stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 3 4; opacity: .55; }
 .rd-rings text { fill: var(--text-2); font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
-.rd-pin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 6px; pointer-events: none; }
-.rd-pin i { width: 12px; height: 12px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 3px var(--panel); position: relative; }
+.rd-pin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.rd-pin i { display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 3px var(--panel); position: relative; }
 .rd-pin i::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--text); animation: halo 2.2s ease-out infinite; }
-.rd-pin span { position: absolute; left: 18px; white-space: nowrap; font-size: 12px; font-weight: 700; paint-order: stroke; -webkit-text-stroke: 3px var(--panel); color: var(--text); }
-.rd-pin span { text-shadow: 0 0 4px var(--panel); -webkit-text-stroke: 0; }
-.rd-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: var(--rule) solid var(--line); }
-.rd-play, .rd-z { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius); border: var(--rule) solid var(--line-2); color: var(--text); font-size: 15px; font-weight: 700; flex: none; }
-.rd-play:hover, .rd-z:hover { border-color: var(--line-3); }
-.rd-play svg { width: 11px; height: 11px; }
-.rd-scrub { flex: 1; min-width: 60px; accent-color: var(--text); }
-.rd-time { font-size: 12px; font-weight: 600; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 112px; text-align: right; }
-.rd-foot { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 0 12px 9px; color: var(--text-3); font-size: 11px; }
+.rd-pin span { position: absolute; left: 18px; top: -3px; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--text); text-shadow: 0 0 4px var(--panel), 0 0 2px var(--panel); }
+.rd-badge { position: absolute; left: 12px; top: 12px; padding: 4px 9px; border-radius: 3px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--bg); background: var(--text); animation: fade-in .25s var(--ease); }
+.radar.is-forecast .rd-map { box-shadow: inset 0 0 0 2px var(--text); }
+.rd-zoom { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; border: var(--rule) solid var(--line-2); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.rd-zoom .rd-z { width: 32px; height: 32px; display: grid; place-items: center; font-size: 17px; font-weight: 700; color: var(--text); }
+.rd-zoom .rd-z + .rd-z { border-top: var(--rule) solid var(--line-2); }
+.rd-zoom .rd-z:hover { background: var(--panel-3); }
+.rd-panel { flex: none; padding: 12px 14px 10px; border-top: var(--rule) solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.rd-outlook { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.rd-sum { font-size: 15px; font-weight: 700; }
+.rd-chance { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rd-chance b { color: var(--text-2); font-weight: 650; }
+.rd-bars { display: flex; gap: 3px; height: 40px; align-items: flex-end; }
+.rd-bars span { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
+.rd-bars i { display: block; width: 100%; background: var(--line-3); border-radius: 1px; transition: height .4s var(--ease); }
+.rd-bars em { position: absolute; bottom: -14px; left: 0; font-style: normal; font-size: 9.5px; color: var(--text-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rd-bars span:nth-child(even) em { visibility: hidden; }
+.rd-bar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.rd-play { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: var(--rule) solid var(--line-3); color: var(--text); flex: none; }
+.rd-play:hover { background: var(--panel-3); }
+.rd-play svg { width: 12px; height: 12px; }
+.rd-track { flex: 1; position: relative; padding-bottom: 16px; min-width: 120px; }
+.rd-scrub { width: 100%; margin: 0; accent-color: var(--text); position: relative; z-index: 1; }
+.rd-ticks { position: absolute; left: 8px; right: 8px; top: 22px; height: 14px; font-size: 10.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rd-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.rd-ticks span.now { color: var(--text); font-weight: 700; }
+.rd-fczone { position: absolute; top: -20px; right: 0; height: 8px; border-radius: 4px; background: repeating-linear-gradient(135deg, var(--line-2) 0 3px, transparent 3px 6px); }
+.rd-fczone { left: 0; }
+.rd-time { font-size: 12.5px; font-weight: 650; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 168px; text-align: right; }
+.radar.is-forecast .rd-time { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.rd-foot { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; color: var(--text-3); font-size: 11px; }
 .rd-legend { display: inline-flex; align-items: center; gap: 6px; }
-.rd-legend i { width: 54px; height: 6px; border-radius: 1px; background: linear-gradient(90deg, #88ddee, #0099cc, #0077aa, #005588, #ffee00, #ffaa00, #ff4400, #c10000); }
-.rd-credit { margin-left: auto; }
-.rd-msg { position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px 12px; background: var(--panel); border: var(--rule) solid var(--line-2); border-radius: var(--radius); color: var(--text-2); font-size: 12.5px; }
-.rd-labels { position: absolute; inset: 0; pointer-events: none; }
-.rd-base img { filter: none; }
-body[data-theme="dark"] .rd-base img { opacity: 1; }
+.rd-legend i { width: 54px; height: 6px; border-radius: 1px; background: linear-gradient(90deg, #88ddee, #0099cc, #0066aa, #ffdc00, #ff9600, #d61414); }
 .rd-legend[data-loading]:not([data-loading=""])::after { content: attr(data-loading); margin-left: 8px; color: var(--text-2); }
-
-/* map: cars fade in/out at the pits; follow mode dims the others */
-.car-dot { transition: opacity .45s var(--ease); }
-.car-dot.gone { opacity: 0; pointer-events: none; }
-.car-dot.faded { opacity: .38; }
-.car-dot.faded.leader { opacity: .55; }
-.mini-btn.on { background: var(--text); color: var(--bg); border-color: var(--text); }
-
-/* connection warning bar: slides down under the header while something is wrong */
-.netbar { position: fixed; z-index: 45; left: 0; right: 0; top: calc(var(--topbar-h) + env(safe-area-inset-top)); display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; font-weight: 600; color: #1a1200; background: var(--flag-yellow); animation: netbar-in .35s var(--ease); }
-.netbar.bad { background: var(--flag-red); color: #fff; }
-.netbar i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; animation: beacon 1.1s var(--ease-in-out) infinite; }
-.netbar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@keyframes netbar-in { from { transform: translateY(-100%); opacity: 0; } }
-.toast.ok { background: var(--flag-green); color: #04150a; border-color: var(--flag-green); font-weight: 650; }
-@media (max-width: 900px) { .netbar span { white-space: normal; } }
+.rd-credit { margin-left: auto; }
+.rd-msg { position: absolute; left: 12px; right: 56px; top: 12px; padding: 10px 12px; background: var(--panel); border: var(--rule) solid var(--line-2); border-radius: var(--radius); color: var(--text-2); font-size: 12.5px; }
+@media (max-width: 900px) { .rd-time { min-width: 0; } .rd-credit { margin-left: 0; } .rd-outlook { gap: 4px; } }
 
 /* ================================================================ driver focus */
 [data-select] { cursor: pointer; }
@@ -856,3 +862,57 @@ body[data-theme="dark"] .rd-base img { opacity: 1; }
 .pc-chart { flex: 1; min-height: 140px; position: relative; }
 .pc-chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .pc-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); font-size: 12.5px; }
+
+/* ================================================================ waving flag */
+.flagshow { position: fixed; z-index: 70; left: 50%; top: calc(var(--topbar-h) + 18px); transform: translateX(-50%); pointer-events: none; }
+.flagshow.in { animation: fs-in .6s var(--ease); }
+.flagshow.out { animation: fs-out .45s ease-in forwards; }
+@keyframes fs-in { from { opacity: 0; transform: translate(-50%, -40px) scale(.92); } }
+@keyframes fs-out { to { opacity: 0; transform: translate(-50%, -24px) scale(.97); } }
+.fs-card { display: flex; align-items: center; gap: 22px; padding: 18px 28px 18px 22px; background: var(--panel); border: var(--rule) solid var(--line-2); border-radius: 6px; box-shadow: var(--shadow); }
+.fs-flag { position: relative; width: 132px; height: 84px; flex: none; }
+.fs-pole { position: absolute; left: 0; top: -8px; bottom: -18px; width: 4px; border-radius: 2px; background: linear-gradient(90deg, #8d8d8d, #e6e6e6 45%, #9a9a9a); }
+.fs-pole::before { content: ""; position: absolute; left: -2px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #d8d8d8; }
+.fs-cloth { position: absolute; left: 4px; right: 0; top: 0; height: 76px; display: flex; }
+.fs-cloth i { flex: 1; height: 100%; --a: calc(var(--i) * .42px); background: var(--cloth); background-size: 128px 76px; background-position: calc(var(--i) * -5.82px) 0;
+  animation: fs-wave 1.05s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -.075s); }
+@keyframes fs-wave { from { transform: translateY(calc(var(--a) * -1)) scaleY(.985); filter: brightness(1.14); } to { transform: translateY(var(--a)) scaleY(1); filter: brightness(.78); } }
+.fs-green { --cloth: #1fb35a; }
+.fs-yellow { --cloth: #f2c200; }
+.fs-red { --cloth: #e3202f; }
+.fs-chequered { --cloth: repeating-conic-gradient(#121212 0 25%, #f4f4f4 0 50%) 0 0 / 25.6px 25.4px; }
+.fs-chequered .fs-cloth i { background: repeating-conic-gradient(#121212 0 25%, #f4f4f4 0 50%); background-size: 25.6px 25.4px; background-position: calc(var(--i) * -5.82px) 0; }
+.fs-board { position: absolute; left: 4px; right: 0; top: 0; height: 76px; display: grid; place-items: center; font-style: normal; font-size: 30px; font-weight: 900; letter-spacing: .04em; color: #111; animation: fs-board 1.05s ease-in-out infinite alternate; }
+@keyframes fs-board { from { transform: translateY(-2px) skewY(-2deg); } to { transform: translateY(2px) skewY(1deg); } }
+.fs-text b { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+.fs-text span { display: block; color: var(--text-2); font-size: 14px; margin-top: 3px; max-width: 320px; }
+.fs-sc .fs-text b, .fs-vsc .fs-text b { color: var(--flag-sc); }
+.fs-red .fs-text b { color: var(--flag-red); }
+.fs-green .fs-text b { color: var(--flag-green); }
+@media (max-width: 900px) {
+  .fs-card { gap: 14px; padding: 12px 16px 12px 14px; }
+  .fs-flag { width: 92px; height: 60px; }
+  .fs-cloth, .fs-board { height: 54px; }
+  .fs-cloth i { background-size: 88px 54px; background-position: calc(var(--i) * -4px) 0; }
+  .fs-text b { font-size: 19px; }
+  .fs-text span { font-size: 12px; }
+}
+
+/* ================================================================ driver photos, logos, penalties */
+.av { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex: none; background: var(--panel-3); box-shadow: 0 0 0 1.5px var(--tc, var(--line-3)); align-self: center; }
+.av img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.av.av-sm { width: 22px; height: 22px; }
+.av.av-lg { width: 54px; height: 54px; box-shadow: 0 0 0 2.5px var(--tc); }
+.tower .d-av { display: inline-flex; align-self: center; }
+.tower .d-av .av { width: calc(var(--row-h) - 10px); height: calc(var(--row-h) - 10px); max-width: 30px; max-height: 30px; }
+.tower.no-photos .d-av { display: none; }
+.d-pen { align-self: center; flex: none; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .03em; padding: 2px 5px; border-radius: 2px; color: var(--flag-red); box-shadow: inset 0 0 0 1.5px var(--flag-red); }
+.b-car .av { width: 30px; height: 30px; }
+.clip-who .av { margin-right: 2px; align-self: center; }
+.dv-pick button { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.dv-pick .av { width: 36px; height: 36px; }
+.dv-head { overflow: hidden; }
+.dv-car { position: absolute; right: -30px; bottom: -12px; height: 74px; opacity: .14; pointer-events: none; filter: grayscale(.2); }
+.dv-head > *:not(.dv-car) { position: relative; }
+.dv-logo { height: 13px; width: auto; vertical-align: -2px; margin-right: 5px; opacity: .9; }
+.dv-who b .d-pen { font-size: 11px; margin-left: 6px; vertical-align: 3px; }
