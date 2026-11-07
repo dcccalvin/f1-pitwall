@@ -4,6 +4,33 @@ import { esc, teamColor, sessionLocalTime } from '../format.js';
 const PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
 const PAUSE = '<svg viewBox="0 0 16 16"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/></svg>';
 
+/**
+ * Voice-clarity chain for F1's raw in-car radio. The clips carry a lot of engine
+ * noise; this can't remove it (engine and voice overlap in pitch) but it cuts the
+ * rumble below speech and the whine above it, lifts the speech presence band and
+ * evens out the level. Returns { input, output } nodes.
+ */
+export function buildVoiceChain(ctx) {
+  const biquad = (type, frequency, Q, gain = 0) => {
+    const f = ctx.createBiquadFilter();
+    f.type = type; f.frequency.value = frequency; f.Q.value = Q; f.gain.value = gain;
+    return f;
+  };
+  const hp1 = biquad('highpass', 240, 0.71);      // two stages = steep cut of engine rumble
+  const hp2 = biquad('highpass', 240, 0.71);
+  const mud = biquad('peaking', 600, 1.2, -3);    // engine firing band, gently pulled down
+  const presence = biquad('peaking', 2600, 0.9, 5); // where consonants (intelligibility) live
+  const lp1 = biquad('lowpass', 3900, 0.71);      // two stages = steep cut of high-rev whine and hiss
+  const lp2 = biquad('lowpass', 3900, 0.71);
+  const comp = ctx.createDynamicsCompressor();     // quiet words up, shouts down
+  comp.threshold.value = -32; comp.knee.value = 12; comp.ratio.value = 4;
+  comp.attack.value = 0.004; comp.release.value = 0.25;
+  const makeup = ctx.createGain();
+  makeup.gain.value = 1.15;
+  hp1.connect(hp2).connect(mud).connect(presence).connect(lp1).connect(lp2).connect(comp).connect(makeup);
+  return { input: hp1, output: makeup };
+}
+
 export class TeamRadio {
   constructor(store) {
     this.store = store;
@@ -11,6 +38,12 @@ export class TeamRadio {
     this.auto = document.getElementById('radio-auto');
     this.auto.checked = localStorage.getItem('radioAuto') === '1';
     this.auto.addEventListener('change', () => localStorage.setItem('radioAuto', this.auto.checked ? '1' : '0'));
+    this.clean = document.getElementById('radio-clean');
+    this.clean.checked = localStorage.getItem('radioClean') !== '0'; // on by default
+    this.clean.addEventListener('change', () => {
+      localStorage.setItem('radioClean', this.clean.checked ? '1' : '0');
+      this.#route();
+    });
     this.audio = new Audio();
     this.audio.preload = 'none';
     this.playing = null;
@@ -29,8 +62,35 @@ export class TeamRadio {
     return `/api/radio?path=${encodeURIComponent(base + path)}`;
   }
 
+  /** Web Audio graph, created on the first play (browsers need a click first). */
+  #ensureGraph() {
+    if (this.ctx || this.graphFailed) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new Ctx();
+      this.src = this.ctx.createMediaElementSource(this.audio);
+      const chain = buildVoiceChain(this.ctx);
+      chain.output.connect(this.ctx.destination);
+      this.chainIn = chain.input;
+      this.#route();
+    } catch (e) {
+      // Fall back to plain playback if the browser can't do it.
+      console.warn('voice filter unavailable', e);
+      this.graphFailed = true;
+      this.ctx = null;
+    }
+  }
+
+  #route() {
+    if (!this.ctx) return;
+    this.src.disconnect();
+    this.src.connect(this.clean.checked ? this.chainIn : this.ctx.destination);
+  }
+
   toggle(path) {
     if (this.playing === path && !this.audio.paused) { this.audio.pause(); this.playing = null; this.#mark(); return; }
+    this.#ensureGraph();
+    this.ctx?.resume?.();
     this.playing = path;
     this.audio.src = this.#url(path);
     this.audio.play().catch(() => { this.playing = null; this.#mark(); });
