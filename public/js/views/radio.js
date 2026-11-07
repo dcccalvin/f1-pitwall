@@ -31,6 +31,45 @@ export function buildVoiceChain(ctx) {
   return { input: hp1, output: makeup };
 }
 
+/** F1 names clips like LEC_16_20261107_113741.mp3 (local track time it was recorded). */
+function recordedUtc(path, gmtOffset) {
+  const r = /_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.mp3$/.exec(path || '');
+  if (!r) return null;
+  const m = /^(-)?(\d+):(\d+)/.exec(gmtOffset || '');
+  const off = m ? (m[1] ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
+  const local = Date.parse(`${r[1]}-${r[2]}-${r[3]}T${r[4]}:${r[5]}:${r[6]}Z`);
+  return isNaN(local) ? null : new Date(local - off * 60000).toISOString();
+}
+
+/**
+ * What was going on when a clip was recorded, from F1's own status timeline
+ * (SessionData.StatusSeries). Clips stay in the list, so one played during a
+ * red flag may have been recorded earlier while the cars were still driving.
+ */
+function contextAt(state) {
+  const raw = state?.SessionData?.StatusSeries;
+  const series = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter((x) => x?.Utc)
+    .map((x) => ({ t: Date.parse(x.Utc), session: x.SessionStatus, track: x.TrackStatus }))
+    .sort((a, b) => a.t - b.t);
+  return (utc) => {
+    const t = Date.parse(utc);
+    if (!t || !series.length) return null;
+    let session = null, track = null, everStarted = false;
+    for (const s of series) {
+      if (s.t > t) break;
+      if (s.session) { session = s.session; if (s.session === 'Started') everStarted = true; }
+      if (s.track) track = s.track;
+    }
+    if (session === 'Aborted') return ['red', 'Red flag'];
+    if (session === 'Inactive') return everStarted ? ['paused', 'Before restart'] : ['pre', 'Before start'];
+    if (session === 'Finished' || session === 'Finalised' || session === 'Ends') return ['pre', 'After the flag'];
+    if (/SCDeployed/i.test(track || '')) return ['sc', 'Safety car'];
+    if (/VSC/i.test(track || '')) return ['sc', 'VSC'];
+    if (/Red/i.test(track || '')) return ['red', 'Red flag'];
+    return null;
+  };
+}
+
 export class TeamRadio {
   constructor(store) {
     this.store = store;
@@ -125,12 +164,14 @@ export class TeamRadio {
     const dl = this.store.state.DriverList || {};
     const off = this.store.state.SessionInfo?.GmtOffset;
     if (!caps.length) { this.root.innerHTML = '<div class="feed-empty">No team radio yet this session.</div>'; return; }
+    const ctx = contextAt(this.store.state);
     this.root.innerHTML = caps.slice().reverse().map((c, i) => {
       const d = dl[c.RacingNumber] || {};
+      const tag = ctx(recordedUtc(c.Path, off) || c.Utc);
       return `<div class="clip${i < fresh ? ' fresh' : ''}" data-path="${esc(c.Path)}" style="--tc:${teamColor(d)}">
         <button class="play" aria-label="Play">${PLAY}</button>
-        <div><div class="clip-who"><b>${esc(d.Tla || c.RacingNumber)}</b><span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div><div class="clip-bar"><i></i></div></div>
-        <div class="clip-time">${esc(c.Utc ? sessionLocalTime(c.Utc, off) : '')}</div>
+        <div><div class="clip-who"><b>${esc(d.Tla || c.RacingNumber)}</b>${tag ? `<em class="clip-tag ${tag[0]}" title="What was happening when this clip was recorded">${tag[1]}</em>` : ''}<span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div><div class="clip-bar"><i></i></div></div>
+        <div class="clip-time" title="Recorded at (track time)">${esc(c.Utc ? sessionLocalTime(c.Utc, off) : '')}</div>
       </div>`;
     }).join('');
     this.#mark();
