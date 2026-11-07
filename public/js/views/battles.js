@@ -75,7 +75,7 @@ export class Battles {
       const attack = x.iv < 1.0;
       const tr = x.trend < -0.04 ? ['closing', `▼ ${Math.abs(x.trend).toFixed(2)}s`] : x.trend > 0.04 ? ['opening', `▲ ${x.trend.toFixed(2)}s`] : ['steady', 'steady'];
       return `<div class="battle${attack ? ' attack' : ''}">
-        <div class="b-head"><span class="b-pos">P${x.pos - 1} · P${x.pos}</span>${attack ? '<span class="b-tag">Attack range</span>' : ''}${x.laps ? `<span class="b-laps">${x.laps} lap${x.laps === 1 ? '' : 's'}</span>` : ''}</div>
+        <div class="b-head"><span class="b-pos">P${x.pos - 1} · P${x.pos}</span>${attack ? '<span class="b-tag">Within 1 s</span>' : ''}${x.laps ? `<span class="b-laps">${x.laps} lap${x.laps === 1 ? '' : 's'}</span>` : ''}</div>
         <div class="b-row">
           ${car(x.a, 'ahead')}
           <div class="b-gap"><span class="b-iv">${x.iv.toFixed(3)}</span><span class="b-trend ${tr[0]}">${tr[1]}</span></div>
