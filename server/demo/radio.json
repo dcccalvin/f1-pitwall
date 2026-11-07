@@ -1,0 +1,60 @@
+{
+ "sessionPath": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-07_Practice_3/",
+ "captures": [
+  {
+   "Utc": "2026-11-07T14:25:39.3564768Z",
+   "RacingNumber": "55",
+   "Path": "TeamRadio/SAI_55_20261107_112525.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:35:08.013Z",
+   "RacingNumber": "12",
+   "Path": "TeamRadio/ANT_12_20261107_113447.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:38:12.237Z",
+   "RacingNumber": "16",
+   "Path": "TeamRadio/LEC_16_20261107_113741.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:39:12.483Z",
+   "RacingNumber": "3",
+   "Path": "TeamRadio/VER_3_20261107_113845.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:42:15.149Z",
+   "RacingNumber": "6",
+   "Path": "TeamRadio/HAD_6_20261107_114204.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:44:48.876Z",
+   "RacingNumber": "16",
+   "Path": "TeamRadio/LEC_16_20261107_114419.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:49:22.0811743Z",
+   "RacingNumber": "6",
+   "Path": "TeamRadio/HAD_6_20261107_114841.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:49:52.816Z",
+   "RacingNumber": "44",
+   "Path": "TeamRadio/HAM_44_20261107_114929.mp3"
+  },
+  {
+   "Utc": "2026-11-07T14:57:29.5628252Z",
+   "RacingNumber": "10",
+   "Path": "TeamRadio/GAS_10_20261107_115654.mp3"
+  },
+  {
+   "Utc": "2026-11-07T15:02:04.12Z",
+   "RacingNumber": "3",
+   "Path": "TeamRadio/VER_3_20261107_120133.mp3"
+  },
+  {
+   "Utc": "2026-11-07T15:03:35.684489Z",
+   "RacingNumber": "44",
+   "Path": "TeamRadio/HAM_44_20261107_120307.mp3"
+  }
+ ]
+}
