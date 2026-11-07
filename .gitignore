@@ -1,0 +1,8 @@
+node_modules/
+recordings/
+cache/
+config.json
+*.log
+.claude/
+.DS_Store
+Thumbs.db
