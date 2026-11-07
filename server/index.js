@@ -35,10 +35,11 @@ const cfg = loadConfig(root);
 const port = Number(opt('port', cfg.port));
 
 // ------------------------------------------------------------------ source
-const timeline = new Timeline();
+let timeline = new Timeline();
 let recorder = null;
 let source = null;
 let sourceStatus = { state: 'starting', detail: '' };
+let sourceOpts = { f1tv: flag('f1tv'), speed: Number(opt('speed', 1)), skip: Number(opt('skip', 0)), file: null };
 
 function latestRecording() {
   if (!fs.existsSync(recordingsDir)) return null;
@@ -49,12 +50,12 @@ function latestRecording() {
 
 function startSource() {
   if (mode === 'demo') {
-    source = new Simulator({ f1tv: flag('f1tv'), speed: Number(opt('speed', 1)) });
+    source = new Simulator({ f1tv: sourceOpts.f1tv, speed: sourceOpts.speed });
   } else if (mode === 'replay') {
-    const given = argv.find((a, i) => !a.startsWith('--') && !['--speed', '--skip', '--port'].includes(argv[i - 1]));
-    const file = given ? path.resolve(given) : latestRecording();
+    const given = sourceOpts.file || argv.find((a, i) => !a.startsWith('--') && !['--speed', '--skip', '--port'].includes(argv[i - 1]));
+    const file = given ? path.resolve(recordingsDir, given) : latestRecording();
     if (!file || !fs.existsSync(file)) { console.error('No recording found. Record a live session first (npm start or npm run record).'); process.exit(1); }
-    source = new Replayer(file, { speed: Number(opt('speed', 1)), skipSeconds: Number(opt('skip', 0)) });
+    source = new Replayer(file, { speed: sourceOpts.speed, skipSeconds: sourceOpts.skip });
   } else {
     source = new F1Feed({ token: cfg.f1tvToken });
     recorder = flag('no-record') ? null : (recorder ?? new Recorder(recordingsDir));
@@ -63,6 +64,52 @@ function startSource() {
   source.on('init', (state) => { timeline.push(INIT, state); recorder?.init(state); });
   source.on('feed', (topic, data, ts) => { timeline.push(topic, data); recorder?.feed(topic, data, ts); });
   source.start();
+}
+
+/** Swap live / demo / replay without restarting; every screen gets the new state. */
+async function switchSource(newMode, opts = {}) {
+  if (source) { source.removeAllListeners(); await source.stop?.(); }
+  mode = newMode;
+  sourceOpts = { f1tv: !!opts.f1tv, speed: Number(opts.speed) || 1, skip: Number(opts.skip) || 0, file: opts.file || null };
+  timeline = new Timeline();
+  sourceStatus = { state: 'starting', detail: '' };
+  startSource();
+  for (const c of clients) {
+    send(c.ws, { type: 'hello', mode, status: statusPayload(), maxDelay: MAX_DELAY_S, serverNow: Date.now() });
+    sendFull(c);
+  }
+}
+
+// Remaining sessions this season, from the free Jolpica (Ergast) API; cached 6h.
+let scheduleCache = { at: 0, data: null };
+async function schedule() {
+  if (scheduleCache.data && Date.now() - scheduleCache.at < 6 * 3600e3) return scheduleCache.data;
+  const r = await fetch('https://api.jolpi.ca/ergast/f1/current.json', { headers: { 'user-agent': 'pitwall-dashboard' } });
+  if (!r.ok) throw new Error(`schedule ${r.status}`);
+  const races = (await r.json()).MRData?.RaceTable?.Races || [];
+  const names = { FirstPractice: 'Practice 1', SecondPractice: 'Practice 2', ThirdPractice: 'Practice 3', SprintQualifying: 'Sprint Qualifying', SprintShootout: 'Sprint Shootout', Sprint: 'Sprint', Qualifying: 'Qualifying' };
+  const sessions = [];
+  for (const race of races) {
+    for (const [k, label] of Object.entries(names)) if (race[k]?.date) sessions.push({ race: race.raceName, name: label, start: `${race[k].date}T${race[k].time || '00:00:00Z'}` });
+    sessions.push({ race: race.raceName, name: 'Race', start: `${race.date}T${race.time || '00:00:00Z'}` });
+  }
+  sessions.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  scheduleCache = { at: Date.now(), data: { sessions } };
+  return scheduleCache.data;
+}
+
+/** Accepts a bare token, or the whole `login-session` cookie (URL-encoded JSON). */
+function extractToken(input) {
+  let s = String(input || '').trim();
+  if (!s) return '';
+  if (s.startsWith('%7B') || s.startsWith('%7b')) { try { s = decodeURIComponent(s); } catch { /* keep */ } }
+  if (s.startsWith('{')) {
+    try {
+      const j = JSON.parse(s);
+      return j?.data?.subscriptionToken || j?.subscriptionToken || '';
+    } catch { return ''; }
+  }
+  return s.replace(/^Bearer\s+/i, '');
 }
 
 function statusPayload() {
@@ -176,12 +223,34 @@ const server = http.createServer(async (req, res) => {
       // Only from this computer, never from other devices on the network.
       if (!isLocal(req)) return sendJson(res, 403, { error: 'Change this on the computer running Pit Wall.' });
       const body = await readBody(req);
-      const token = String(body.token || '').trim();
+      const token = extractToken(body.token);
+      if (body.token && !token) return sendJson(res, 400, { error: 'Could not find a subscriptionToken in that cookie.' });
       if (token && token.split('.').length !== 3) return sendJson(res, 400, { error: 'That does not look like an F1 TV token.' });
       cfg.f1tvToken = token || null;
       saveConfig(root, { f1tvToken: token });
-      if (mode === 'live') { await source.stop(); startSource(); }
+      if (mode === 'live') await switchSource('live');
       return sendJson(res, 200, { ok: true, status: statusPayload() });
+    }
+    if (url.pathname === '/api/mode' && req.method === 'POST') {
+      if (!isLocal(req)) return sendJson(res, 403, { error: 'Change the data source on the laptop running Pit Wall.' });
+      const body = await readBody(req);
+      if (!['live', 'demo', 'replay'].includes(body.mode)) return sendJson(res, 400, { error: 'unknown mode' });
+      if (body.mode === 'replay') {
+        const file = path.basename(String(body.file || ''));
+        if (!file || !fs.existsSync(path.join(recordingsDir, file))) return sendJson(res, 400, { error: 'Recording not found.' });
+        body.file = file;
+      }
+      await switchSource(body.mode, body);
+      return sendJson(res, 200, { ok: true, mode });
+    }
+    if (url.pathname === '/api/recordings') {
+      const files = fs.existsSync(recordingsDir) ? fs.readdirSync(recordingsDir).filter((f) => f.endsWith('.jsonl'))
+        .map((f) => { const st = fs.statSync(path.join(recordingsDir, f)); return { name: f, size: st.size, mtime: st.mtimeMs }; })
+        .sort((a, b) => b.mtime - a.mtime) : [];
+      return sendJson(res, 200, { files });
+    }
+    if (url.pathname === '/api/schedule') {
+      try { return sendJson(res, 200, await schedule()); } catch (e) { return sendJson(res, 200, { sessions: [], error: e.message }); }
     }
 
     // static files
