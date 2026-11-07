@@ -124,10 +124,10 @@ export class TrackMap {
   #dot(num, d) {
     let g = this.dots.get(num);
     if (g) return g;
-    const r = this.circuit.size * 0.017;
+    const r = this.circuit.size * 0.019;
     g = svg('g', { class: 'car-dot', 'data-num': num });
     const circle = svg('circle', { r, fill: teamColor(d), 'stroke-width': r * 0.35 });
-    const text = svg('text', { x: r * 1.5, y: r * 0.45, 'font-size': r * 1.7, 'stroke-width': r * 0.5 });
+    const text = svg('text', { x: r * 1.45, y: r * 0.55, 'font-size': r * 2.1, 'stroke-width': r * 0.55 });
     text.textContent = d?.Tla || num;
     g.append(circle, text);
     this.carLayer.append(g);
@@ -192,8 +192,13 @@ export class TrackMap {
     const ts = trackState(s).key;
     const slow = ts === 'sc' ? 1.4 : ts === 'vsc' || ts === 'vsc-ending' ? 1.32 : ts === 'red' ? 50 : 1;
     const seen = new Set();
+    const labels = []; // placed label boxes, so crowded labels can be hidden
+    const lw = this.circuit.size * 0.075, lh = this.circuit.size * 0.04;
+    const sel = this.store.selected;
+    const prio = sel && order.includes(sel) ? [sel, ...order.filter((n) => n !== sel)] : order;
 
-    order.forEach((num, i) => {
+    prio.forEach((num) => {
+      const i = order.indexOf(num);
       const l = lines[num];
       if (!l) return;
       let p = null;
@@ -218,7 +223,9 @@ export class TrackMap {
       seen.add(num);
       const g = this.#dot(num, dl[num]);
       g.setAttribute('transform', `translate(${p.x.toFixed(0)},${p.y.toFixed(0)})`);
-      const cls = `car-dot${i === 0 ? ' leader' : ''}${this.store.selected === num ? ' selected' : ''}${l.Retired || l.Stopped ? ' dim' : ''}`;
+      const clash = labels.some((b) => Math.abs(b.x - p.x) < lw && Math.abs(b.y - p.y) < lh);
+      if (!clash) labels.push(p);
+      const cls = `car-dot${i === 0 ? ' leader' : ''}${sel === num ? ' selected' : ''}${l.Retired || l.Stopped ? ' dim' : ''}${clash ? ' nolabel' : ''}`;
       if (g.getAttribute('class') !== cls) g.setAttribute('class', cls);
       g.style.display = '';
     });

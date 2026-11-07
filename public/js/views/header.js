@@ -39,6 +39,7 @@ export class Header {
     const s = this.store.state;
     const info = s.SessionInfo || {};
     $('event-name').textContent = info.Meeting?.Name ? `${info.Meeting.Name} · ${info.Meeting.Circuit?.ShortName || ''}` : '—';
+    $('event-cc').textContent = info.Meeting?.Country?.Code || '—';
     $('session-name').textContent = info.Name || (this.store.connected ? 'No session' : 'Connecting…');
     const badge = $('mode-badge');
     const mode = this.store.status?.mode;
@@ -54,10 +55,13 @@ export class Header {
       $('lc-label').textContent = 'Lap';
       const html = `${esc(s.LapCount.CurrentLap ?? '–')}<small>/${esc(s.LapCount.TotalLaps ?? '–')}</small>`;
       if ($('lc-value').innerHTML !== html) $('lc-value').innerHTML = html;
+      const pct = (Number(s.LapCount.CurrentLap) - 1) / (Number(s.LapCount.TotalLaps) || 1);
+      $('lc-bar').style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`;
       this.clockMode = false;
     } else {
-      $('lc-label').textContent = 'Remaining';
+      $('lc-label').textContent = kind === 'quali' ? `Q${Number(s.TimingData?.SessionPart) || 1} · left` : 'Time left';
       this.clockMode = true;
+      this.sessionLen = { practice: 3600, quali: [1080, 900, 720][(Number(s.TimingData?.SessionPart) || 1) - 1] }[kind] || 3600;
     }
 
     const w = s.WeatherData;
@@ -88,13 +92,15 @@ export class Header {
   frame(now) {
     if (!this.clockMode) return;
     const c = this.store.state.ExtrapolatedClock;
-    let txt = '—';
+    let txt = '—', rem = null;
     if (c?.Remaining) {
-      let rem = parseClock(c.Remaining);
+      rem = parseClock(c.Remaining);
       if (c.Extrapolating && c.Utc) rem -= (now - Date.parse(c.Utc)) / 1000;
+      rem = Math.max(0, rem);
       txt = fmtClock(rem);
     }
     const el = $('lc-value');
     if (el.textContent !== txt) el.textContent = txt;
+    if (rem != null) $('lc-bar').style.width = `${Math.max(0, Math.min(1, 1 - rem / (this.sessionLen || 3600))) * 100}%`;
   }
 }

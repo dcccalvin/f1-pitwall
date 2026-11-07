@@ -9,7 +9,6 @@ export class Telemetry {
   constructor(store) {
     this.store = store;
     this.root = document.getElementById('telemetry');
-    this.lockIcon = document.getElementById('tele-lock');
     this.hist = new Map(); // num -> [{ts, speed, rpm, gear, thr, brk}]
     this.lag = null;
     this.mode = null;
@@ -90,7 +89,7 @@ export class Telemetry {
 
   update() {
     const f1tv = this.hasData || this.store.status?.f1tv;
-    this.lockIcon.hidden = !!f1tv;
+    document.body.classList.toggle('f1tv-locked', !f1tv);
     const mode = !f1tv ? 'locked' : this.hasData ? 'live' : 'waiting';
     if (mode !== this.mode) {
       this.mode = mode;
@@ -197,6 +196,6 @@ export class Telemetry {
       }
     });
     g.fillStyle = css.getPropertyValue('--text-3');
-    g.fillText('brake', right - 34, h - 4);
+    g.fillText('brake', 4, h - 7);
   }
 }
