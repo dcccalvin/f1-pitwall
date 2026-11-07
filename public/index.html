@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05070a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Pit Wall</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/Inter-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/JetBrainsMono-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/SairaCondensed-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body data-track="none" data-kind="race" data-density="comfortable" data-accent="cyan">
+
+  <header class="topbar" id="topbar">
+    <div class="brand" title="Pit Wall">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient></defs><rect x="2" y="2" width="28" height="28" rx="8" fill="none" stroke="url(#bg1)" stroke-width="2.6"/><path d="M9 21.5 15 10.5h4.2l-6 11zM17.2 21.5l6-11" stroke="url(#bg1)" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>
+      <span>Pit<b>Wall</b></span>
+    </div>
+
+    <div class="event">
+      <div class="event-top"><span class="cc" id="event-cc">—</span><span id="event-name">—</span></div>
+      <div class="session-name"><span id="session-name">Connecting…</span><span class="mode-badge" id="mode-badge" hidden></span></div>
+    </div>
+
+    <div class="lapclock" id="lapclock">
+      <div class="lc-row"><span class="lc-label" id="lc-label">Lap</span><span class="lc-value" id="lc-value">—</span></div>
+      <div class="lc-bar"><i id="lc-bar"></i></div>
+    </div>
+
+    <div class="status-pill" id="track-pill"><span class="flagicon"></span><span id="track-label">—</span></div>
+
+    <div class="weather" id="weather" title="Weather">
+      <div class="wx"><span class="wx-k">Air</span><span class="wx-v" id="wx-air">—</span></div>
+      <div class="wx"><span class="wx-k">Track</span><span class="wx-v hot" id="wx-track">—</span></div>
+      <div class="wx wx-hide-sm"><span class="wx-k">Humidity</span><span class="wx-v" id="wx-hum">—</span></div>
+      <div class="wx wx-hide-sm"><span class="wx-k">Wind</span><span class="wx-v"><svg class="wind-arrow" id="wx-arrow" viewBox="0 0 12 12"><path d="M6 1v10M6 1 3 4.5M6 1l3 3.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg><span id="wx-wind">—</span></span></div>
+      <div class="wx rain" id="wx-rain" hidden><span class="wx-k">Rain</span><span class="wx-v">Wet</span></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button class="tb-btn" id="layout-btn" title="Layout, text size and colours">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="7" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="13" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+      <span>Layout</span>
+    </button>
+
+    <button class="delay-btn" id="delay-btn" title="Hold the data back to match your TV">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 9v4l2.5 2M9.5 2.5h5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
+      <span class="delay-txt"><span class="delay-k">Delay</span><span class="delay-v" id="delay-v">0s</span></span>
+    </button>
+
+    <div class="conn" id="conn"><span class="conn-dot"></span><span id="conn-label">Connecting</span></div>
+    <div class="data-badge" id="data-badge">Free data</div>
+
+    <button class="icon-btn" id="settings-btn" title="Settings & phone link" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.4 7.4 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 2.6-1.5l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    </button>
+  </header>
+
+  <main class="layout" id="layout"></main>
+
+  <!-- Widgets. The layout engine moves these into columns / tab groups. -->
+  <div id="parking" hidden>
+    <section class="widget" id="w-tower" data-w="tower">
+      <div class="w-tools">
+        <div class="legend"><span><i class="lg-p"></i>Fastest</span><span><i class="lg-g"></i>Personal best</span><span><i class="lg-pit"></i>Pit lane</span></div>
+        <button class="mini-btn" id="cols-btn" title="Choose columns"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Columns</button>
+      </div>
+      <div class="tower">
+        <div class="tower-head" id="tower-head"></div>
+        <div class="tower-scroll"><div class="tower-body" id="tower-body"></div></div>
+        <div class="empty" id="empty" hidden></div>
+      </div>
+    </section>
+
+    <section class="widget" id="w-map" data-w="map">
+      <div class="w-tools"><span class="map-mode" id="map-mode">Estimated</span></div>
+      <div class="map-wrap" id="map-wrap"><div class="map-placeholder">Loading circuit…</div></div>
+      <div class="map-foot" id="map-foot"></div>
+    </section>
+
+    <section class="widget" id="w-battles" data-w="battles">
+      <div class="battles" id="battles"></div>
+    </section>
+
+    <section class="widget" id="w-moments" data-w="moments">
+      <div class="moments" id="moments"></div>
+    </section>
+
+    <section class="widget" id="w-control" data-w="control">
+      <div class="feed" id="rc-feed"></div>
+    </section>
+
+    <section class="widget" id="w-radio" data-w="radio">
+      <div class="w-tools"><label class="switch"><input type="checkbox" id="radio-auto"><span></span>Auto-play</label></div>
+      <div class="radio-list" id="radio-list"></div>
+    </section>
+
+    <section class="widget" id="w-strategy" data-w="strategy">
+      <div class="strategy" id="strategy"></div>
+    </section>
+
+    <section class="widget" id="w-telemetry" data-w="telemetry">
+      <div class="telemetry" id="telemetry"></div>
+    </section>
+  </div>
+
+  <nav class="bottomnav" id="bottomnav"></nav>
+
+  <!-- Delay popover -->
+  <div class="popover" id="delay-pop" hidden>
+    <div class="pop-title">Match the data to your TV</div>
+    <p class="pop-help">Your stream runs behind live. Hold the data back so the timing changes exactly when you see it happen.</p>
+    <div class="delay-row">
+      <button data-d="-5">−5</button><button data-d="-1">−1</button>
+      <div class="delay-big" id="delay-big">0s</div>
+      <button data-d="1">+1</button><button data-d="5">+5</button>
+    </div>
+    <input type="range" id="delay-range" min="0" max="300" step="1" value="0">
+    <div class="presets">
+      <button data-p="0">Live</button><button data-p="8">Cable · 8s</button><button data-p="30">Stream · 30s</button><button data-p="50">F1 TV · 50s</button><button data-p="70">70s</button>
+    </div>
+    <div class="sync">
+      <div class="pop-title small">Quick sync</div>
+      <p class="pop-help">Pick a car. Press the button the moment you see it cross the finish line on TV.</p>
+      <div class="sync-row">
+        <select id="sync-driver"></select>
+        <button class="primary" id="sync-btn">Crossed the line now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layout popover -->
+  <div class="popover layout-pop" id="layout-pop" hidden></div>
+  <!-- Tower columns popover -->
+  <div class="popover cols-pop" id="cols-pop" hidden></div>
+  <!-- Panel menu -->
+  <div class="menu" id="panel-menu" hidden></div>
+
+  <div class="sheet" id="sheet" hidden></div>
+
+  <dialog class="settings" id="settings">
+    <form method="dialog" class="settings-inner">
+      <div class="settings-head">
+        <h2>Settings</h2>
+        <button class="icon-btn" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="settings-body" id="settings-body"></div>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

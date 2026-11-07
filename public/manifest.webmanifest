@@ -1,0 +1,11 @@
+{
+  "name": "Pit Wall",
+  "short_name": "Pit Wall",
+  "description": "Live F1 timing second screen",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0c0f",
+  "theme_color": "#0a0c0f",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
