@@ -78,6 +78,13 @@
   --rule: 1px;
   --topbar-h: 56px;
   --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+
+  /* motion: quick and decisive, used where something changed */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --dur-1: 140ms;
+  --dur-2: 260ms;
+  --dur-3: 560ms;
 }
 
 body[data-theme="paper"] {
