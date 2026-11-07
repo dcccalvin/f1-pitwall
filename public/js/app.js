@@ -12,6 +12,7 @@ import { Strategy } from './views/strategy.js';
 import { Telemetry } from './views/telemetry.js';
 import { Battles } from './views/battles.js';
 import { Moments } from './views/moments.js';
+import { Radar } from './views/radar.js';
 import { DriverSheet } from './views/sheet.js';
 import { Settings } from './views/settings.js';
 
@@ -89,11 +90,12 @@ const strategy = new Strategy(store);
 const telemetry = new Telemetry(store);
 const battles = new Battles(store);
 const moments = new Moments(store);
+const radar = new Radar(store);
 const sheet = new DriverSheet(store);
 new Settings(store);
 const layout = new Layout(store);
 
-const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, sheet];
+const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, radar, sheet];
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && layout.focus && document.querySelectorAll('.popover:not([hidden]), .menu:not([hidden]), dialog[open]').length === 0) layout.setFocus(null);
@@ -247,7 +249,7 @@ wakeLock();
 
 // ------------------------------------------------------------------ empty state
 let schedule = null;
-fetch('/api/schedule').then((r) => r.json()).then((s) => { schedule = s; dirty.add('*'); }).catch(() => { schedule = { sessions: [] }; });
+fetch('/api/schedule').then((r) => r.json()).then((s) => { schedule = s; store.schedule = s; dirty.add('*'); }).catch(() => { schedule = { sessions: [] }; });
 
 function renderEmpty(el) {
   const next = (schedule?.sessions || []).find((x) => Date.parse(x.start) > Date.now() - 2 * 3600e3);

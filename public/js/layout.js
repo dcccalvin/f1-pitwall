@@ -7,6 +7,7 @@ const I = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 export const WIDGETS = {
   tower: { title: 'Timing', short: 'Timing', icon: I('<path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') },
   map: { title: 'Track map', short: 'Map', icon: I('<path d="M7 19c-2.5 0-3.5-2.5-2-4.5l3-4c1-1.4.4-3.5 1.5-4.6C11 4.4 14 5 14.5 7c.4 1.7 1.8 2 3.3 2.2 2.6.4 3 3.3 1.2 4.8l-4.5 3.7C13 19 11 19 9 19z" stroke="currentColor" stroke-width="1.8" fill="none"/>') },
+  radar: { title: 'Weather radar', short: 'Radar', icon: I('<circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" fill="none"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none" opacity=".6"/><path d="M12 12 18 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>') },
   battles: { title: 'Battles', short: 'Battles', icon: I('<path d="M5 18 15 8M15 8h-5M15 8v5M19 6l-4 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="2.2" stroke="currentColor" stroke-width="1.6" fill="none"/>') },
   moments: { title: 'Moments', short: 'Moments', icon: I('<path d="M13 3 5 14h6l-1 7 8-11h-6z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>') },
   control: { title: 'Race control', short: 'Control', icon: I('<path d="M6 21V4M6 4h11l-2 4 2 4H6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round" stroke-linecap="round"/>') },
@@ -19,24 +20,24 @@ const LOCK = '<span class="lock" title="Needs F1 TV"><svg viewBox="0 0 16 16"><r
 export const PRESETS = {
   pitwall: { name: 'Pit wall', desc: 'Timing, map and feeds', layout: { cols: [
     { w: 1.45, groups: [{ tabs: ['tower'] }] },
-    { w: 1, groups: [{ h: 1.1, tabs: ['map', 'battles'] }, { h: 1, tabs: ['moments', 'control', 'radio', 'strategy', 'telemetry'] }] },
+    { w: 1, groups: [{ h: 1.1, tabs: ['map', 'battles', 'radar'] }, { h: 1, tabs: ['moments', 'control', 'radio', 'strategy', 'telemetry'] }] },
   ] } },
   engineer: { name: 'Race engineer', desc: 'Three columns, big screens', layout: { cols: [
     { w: 1.35, groups: [{ tabs: ['tower'] }] },
-    { w: 1, groups: [{ h: 1.25, tabs: ['map'] }, { h: 1, tabs: ['telemetry', 'strategy'] }] },
+    { w: 1, groups: [{ h: 1.25, tabs: ['map', 'radar'] }, { h: 1, tabs: ['telemetry', 'strategy'] }] },
     { w: 0.8, groups: [{ h: 1, tabs: ['battles'] }, { h: 1.3, tabs: ['moments', 'control', 'radio'] }] },
   ] } },
   timing: { name: 'Timing focus', desc: 'Wide tower, slim side bar', layout: { cols: [
     { w: 2.2, groups: [{ tabs: ['tower'] }] },
-    { w: 0.85, groups: [{ h: 1, tabs: ['battles', 'map'] }, { h: 1.2, tabs: ['moments', 'control', 'radio', 'strategy', 'telemetry'] }] },
+    { w: 0.85, groups: [{ h: 1, tabs: ['battles', 'map', 'radar'] }, { h: 1.2, tabs: ['moments', 'control', 'radio', 'strategy', 'telemetry'] }] },
   ] } },
   map: { name: 'Map focus', desc: 'Big live track map', layout: { cols: [
     { w: 0.95, groups: [{ tabs: ['tower'] }] },
-    { w: 1.3, groups: [{ h: 1.9, tabs: ['map'] }, { h: 1, tabs: ['battles', 'moments', 'control', 'radio', 'strategy', 'telemetry'] }] },
+    { w: 1.3, groups: [{ h: 1.9, tabs: ['map'] }, { h: 1, tabs: ['battles', 'moments', 'control', 'radio', 'radar', 'strategy', 'telemetry'] }] },
   ] } },
   sofa: { name: 'Sofa', desc: 'Large text, fewer panels', density: 'large', layout: { cols: [
     { w: 1.3, groups: [{ tabs: ['tower'] }] },
-    { w: 1, groups: [{ h: 1.15, tabs: ['map'] }, { h: 1, tabs: ['battles', 'moments', 'control'] }] },
+    { w: 1, groups: [{ h: 1.15, tabs: ['map'] }, { h: 1, tabs: ['battles', 'moments', 'control', 'radar'] }] },
   ] } },
 };
 
@@ -72,13 +73,29 @@ export class Layout {
   #load() {
     try {
       const s = JSON.parse(localStorage.getItem('layout'));
-      if (s?.cols?.length && s.cols.every((c) => c.groups?.length)) return s;
+      if (s?.cols?.length && s.cols.every((c) => c.groups?.length)) return this.#migrate(s);
     } catch { /* fall through */ }
     const key = window.innerWidth >= 1700 ? 'engineer' : 'pitwall';
     return { ...clone(PRESETS[key].layout), preset: key };
   }
 
-  save() { localStorage.setItem('layout', JSON.stringify(this.state)); }
+  /** Panels added in a later version appear automatically (next to the map). */
+  #migrate(s) {
+    const known = new Set(s.known || []);
+    const placed = new Set(s.cols.flatMap((c) => c.groups.flatMap((g) => g.tabs)));
+    for (const id of Object.keys(WIDGETS)) {
+      if (known.has(id) || placed.has(id) || !s.known) continue;
+      const g = s.cols.flatMap((c) => c.groups).find((x) => x.tabs.includes('map')) || s.cols.at(-1).groups.at(-1);
+      g.tabs.push(id);
+    }
+    if (!s.known) { // first run of this version: assume everything not placed was hidden on purpose, except brand-new panels
+      for (const id of ['radar']) if (!placed.has(id)) { const g = s.cols.flatMap((c) => c.groups).find((x) => x.tabs.includes('map')) || s.cols.at(-1).groups.at(-1); g.tabs.push(id); }
+    }
+    s.known = Object.keys(WIDGETS);
+    return s;
+  }
+
+  save() { this.state.known = Object.keys(WIDGETS); localStorage.setItem('layout', JSON.stringify(this.state)); }
 
   applyPreset(key) {
     const p = PRESETS[key];
