@@ -61,7 +61,7 @@ body[data-track^="vsc"] .topbar::after, body[data-track="red"] .topbar::after { 
 
 .lapclock { min-width: 120px; }
 .lc-row { display: flex; align-items: baseline; gap: 8px; }
-.lc-label { color: var(--text-3); font-size: var(--fs-xs); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.lc-label { color: var(--text-3); font-size: var(--fs-xs); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
 .lc-value { display: inline-block; font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .lc-value small { color: var(--text-3); font-size: 15px; font-weight: 500; letter-spacing: 0; margin-left: 1px; }
 .lc-bar { height: 2px; margin-top: 6px; background: var(--line-2); }
