@@ -55,7 +55,11 @@ export const TRACK_STATUS = {
 export function trackState(state) {
   const ss = state?.SessionStatus?.Status;
   if (ss === 'Finished' || ss === 'Finalised' || ss === 'Ends') return { key: 'chequered', label: 'Chequered flag' };
-  if (ss === 'Inactive' || (!ss && !state?.TrackStatus)) return { key: 'none', label: 'Not started' };
+  // Before the start, still report a flag if race control has one out.
+  if (ss === 'Inactive' || (!ss && !state?.TrackStatus)) {
+    const st = String(state?.TrackStatus?.Status ?? '1');
+    return st !== '1' && TRACK_STATUS[st] ? TRACK_STATUS[st] : { key: 'none', label: 'Not started' };
+  }
   if (ss === 'Aborted') return { key: 'red', label: 'Session suspended' };
   return TRACK_STATUS[state?.TrackStatus?.Status] || { key: 'none', label: state?.TrackStatus?.Message || '—' };
 }

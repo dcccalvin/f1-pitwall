@@ -3,6 +3,16 @@ import { esc, trackState, sessionKind, parseClock, fmtClock, driverOrder } from 
 
 const $ = (id) => document.getElementById(id);
 
+/** SessionInfo.StartDate is local track time; GmtOffset turns it into UTC ms. */
+function sessionStartUtc(info) {
+  if (!info?.StartDate) return null;
+  const local = Date.parse(`${info.StartDate.slice(0, 19)}Z`);
+  const m = /^(-)?(\d+):(\d+)/.exec(info.GmtOffset || '');
+  if (isNaN(local)) return null;
+  const off = m ? (m[1] ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
+  return local - off * 60000;
+}
+
 /** Restart a CSS animation class on an element. */
 function retrigger(el, cls) {
   el.classList.remove(cls);
@@ -63,7 +73,15 @@ export class Header {
     if ($('track-label').textContent !== ts.label) $('track-label').textContent = ts.label;
 
     const kind = sessionKind(s);
-    if (kind === 'race' && s.LapCount) {
+    // Before the session starts F1 sends the full session length as a frozen
+    // clock ("18:00"). Show a countdown to the start time instead.
+    this.startUtc = sessionStartUtc(s.SessionInfo);
+    this.preStart = s.SessionStatus?.Status === 'Inactive' && !!this.startUtc;
+    if (this.preStart) {
+      $('lc-label').textContent = 'Starts in';
+      this.clockMode = true;
+      $('lc-bar').style.width = '0%';
+    } else if (kind === 'race' && s.LapCount) {
       $('lc-label').textContent = 'Lap';
       const html = `${esc(s.LapCount.CurrentLap ?? '–')}<small>/${esc(s.LapCount.TotalLaps ?? '–')}</small>`;
       if ($('lc-value').innerHTML !== html) {
@@ -91,6 +109,7 @@ export class Header {
       $('wx-arrow').style.transform = `rotate(${(Number(w.WindDirection) + 180) % 360}deg)`;
       $('wx-rain').hidden = !(Number(w.Rainfall) > 0);
     }
+    this.#wet(s);
 
     const st = this.store.status || {};
     const state = !this.store.connected ? 'reconnecting' : st.state || 'connecting';
@@ -106,8 +125,66 @@ export class Header {
     this.range.max = this.store.maxDelay || 300;
   }
 
+  /** Rain / wet-session chip: live rainfall, race control wet declarations, rain risk, wet tyres. */
+  #wet(s) {
+    const raining = Number(s.WeatherData?.Rainfall) > 0;
+    const raw = s.RaceControlMessages?.Messages;
+    const msgs = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(Boolean).map((m) => String(m.Message || ''));
+    // Walk race control in order so later messages override earlier ones.
+    let declared = false, lowGrip = false, overtakeOff = false, risk = null;
+    for (const m of msgs) {
+      if (/DECLARED WET|WET RACE|WET SESSION|TRACK IS WET|WET TRACK/i.test(m)) declared = true;
+      if (/DRY TRACK|TRACK (IS )?DRY|DECLARED DRY/i.test(m)) declared = false;
+      if (/LOW GRIP CONDITIONS|LOW GRIP DELTA ACTIVE/i.test(m)) lowGrip = true;
+      if (/NORMAL GRIP|LOW GRIP (CONDITIONS )?(ENDED|NO LONGER)/i.test(m)) lowGrip = false;
+      if (/OVERTAKE (MODE )?DISABLED/i.test(m)) overtakeOff = true;
+      if (/OVERTAKE (MODE )?ENABLED/i.test(m)) overtakeOff = false;
+      const r = /RISK OF RAIN[^0-9]*(\d+)\s*%/i.exec(m);
+      if (r) risk = Number(r[1]);
+    }
+    const lines = s.TimingData?.Lines || {};
+    const wetTyres = Object.keys(lines).filter((n) => {
+      const st = s.TimingAppData?.Lines?.[n]?.Stints;
+      const last = st ? (Array.isArray(st) ? st.at(-1) : st[Math.max(...Object.keys(st).map(Number))]) : null;
+      return last && /INTERMEDIATE|WET/.test(last.Compound || '') && !lines[n]?.InPit && !lines[n]?.Retired;
+    }).length;
+
+    const parts = [];
+    if (raining) parts.push('Raining');
+    if (declared) parts.push('Wet track');
+    if (lowGrip && !declared) parts.push('Low grip');
+    if (wetTyres) parts.push(`${wetTyres} on wets`);
+    if (!parts.length && risk) parts.push(`Rain risk ${risk}%`);
+    const label = parts.join(' · ');
+    const cls = raining || declared || lowGrip || wetTyres ? 'rain' : 'risk';
+    const chip = $('wet-chip');
+    chip.hidden = !label;
+    chip.className = `wet-chip ${cls}`;
+    chip.title = [
+      raining && 'Rain is falling at the track (weather station)',
+      declared && 'Race control: WET TRACK',
+      lowGrip && 'Race control: low grip conditions',
+      overtakeOff && 'Race control: overtake mode disabled',
+      wetTyres && `${wetTyres} cars on intermediate or wet tyres`,
+      risk && `Race control: ${risk}% risk of rain`,
+    ].filter(Boolean).join('\n');
+    if ($('wet-label').textContent !== label) $('wet-label').textContent = label;
+
+    // Tell the user once when rain starts (not on first load).
+    if (this.wasRaining === false && raining) this.store.toast('Rain is falling at the track', 'rain');
+    this.wasRaining = raining;
+  }
+
   frame(now) {
     if (!this.clockMode) return;
+    if (this.preStart) {
+      const left = (this.startUtc - now) / 1000;
+      const txt = left > 0 ? fmtClock(left) : 'Soon';
+      const el = $('lc-value');
+      if (el.textContent !== txt) el.textContent = txt;
+      $('lc-label').textContent = left > 0 ? 'Starts in' : 'Starting';
+      return;
+    }
     const c = this.store.state.ExtrapolatedClock;
     let txt = '—', rem = null;
     if (c?.Remaining) {
