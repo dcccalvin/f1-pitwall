@@ -174,10 +174,18 @@ export class TrackMap {
     this.modeEl.classList.toggle('live', live);
     this.modeEl.title = live ? 'Real car positions (F1 TV)' : 'Estimated from timing loops. Connect F1 TV for real GPS positions.';
 
+    // F1's track status is the authority: when it says all clear, no sector is yellow.
+    if (trackState(s).key === 'green' && this.flagged.size) { this.flagged.clear(); this.#applyFlags(); }
+
     const lines = s.TimingData?.Lines || {};
     const inPit = driverOrder(s).filter((n) => lines[n]?.InPit && !lines[n]?.Retired);
     const dl = s.DriverList || {};
-    const txt = inPit.length ? `<span class="pitlist">In pit lane: <b>${inPit.map((n) => esc(dl[n]?.Tla || n)).join(', ')}</b></span>` : '';
+    const yellow = [...this.flagged].filter(([, f]) => f === 'yellow').map(([n]) => n).sort((a, b) => a - b);
+    const red = [...this.flagged].filter(([, f]) => f === 'red').map(([n]) => n);
+    const flagTxt = yellow.length || red.length
+      ? `<span class="flaglist${red.length ? ' red' : ''}"><i></i>${red.length ? `Red flag in marshal sector${red.length > 1 ? 's' : ''} ${red.join(', ')}` : `Yellow flag in marshal sector${yellow.length > 1 ? 's' : ''} ${yellow.join(', ')}`}: slow down, no overtaking there</span>`
+      : '';
+    const txt = flagTxt + (inPit.length ? `<span class="pitlist">In pit lane: <b>${inPit.map((n) => esc(dl[n]?.Tla || n)).join(', ')}</b></span>` : '');
     if (this.foot.dataset.k !== txt) { this.foot.dataset.k = txt; this.foot.innerHTML = txt; }
   }
 
