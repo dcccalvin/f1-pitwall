@@ -32,6 +32,7 @@ export class Moments {
       this.prev.set(num, { pos: Number(l.Position), inPit: !!l.InPit, retired: !!l.Retired, stints: st ? Object.keys(st).length : 0 });
     }
     this.track = state?.TrackStatus?.Status ?? null;
+    this.rain = state?.WeatherData ? Number(state.WeatherData.Rainfall) > 0 : undefined;
     this.drawn = -1;
   }
 
@@ -50,6 +51,12 @@ export class Moments {
       this.track = data.Status;
       const ts = TS[data.Status];
       if (ts && !(data.Status === '1' && !race)) this.#add(t, state, { kind: 'flag', cls: ts[0], text: ts[1] });
+    }
+
+    if (topic === 'WeatherData' && data?.Rainfall !== undefined) {
+      const raining = Number(data.Rainfall) > 0;
+      if (this.rain !== undefined && raining !== this.rain) this.#add(t, state, { kind: 'flag', cls: 'rain', text: raining ? 'Rain is falling at the track' : 'Rain has stopped' });
+      this.rain = raining;
     }
 
     if (topic === 'RaceControlMessages') {
