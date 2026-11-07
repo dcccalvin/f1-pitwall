@@ -120,6 +120,35 @@ async function switchSource(newMode, opts = {}) {
 // Remaining sessions this season, from the free Jolpica (Ergast) API; cached 6h.
 let scheduleCache = { at: 0, data: null };
 let radarCache = { at: 0, data: null };
+
+// Rain forecast for the next 3 hours (15-min steps) on a 7×7 grid around the
+// circuit, from Open-Meteo (free, no account). Cached 20 min per location.
+const forecastCache = new Map();
+async function rainForecast(lat, lon) {
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const hit = forecastCache.get(key);
+  if (hit && Date.now() - hit.at < 20 * 60000) return hit.data;
+  const N = 7, span = 1.5, k = 1 / Math.cos((lat * Math.PI) / 180); // ~165 km each way
+  const lats = [], lons = [];
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    lats.push(+(lat + span - (2 * span * i) / (N - 1)).toFixed(3));
+    lons.push(+(lon - span * k + (2 * span * k * j) / (N - 1)).toFixed(3));
+  }
+  const u = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&minutely_15=precipitation&forecast_minutely_15=12&hourly=precipitation_probability&forecast_hours=4&timezone=GMT`;
+  const r = await fetch(u, { headers: { 'user-agent': 'pitwall-dashboard' } });
+  if (!r.ok) throw new Error(`forecast ${r.status}`);
+  const arr = await r.json();
+  const pts = Array.isArray(arr) ? arr : [arr];
+  const times = (pts[0]?.minutely_15?.time || []).map((t) => `${t}:00Z`);
+  const centre = pts[Math.floor(pts.length / 2)];
+  const data = {
+    generated: Date.now(), n: N, lats, lons, times,
+    precip: times.map((_, ti) => pts.map((p) => Number(p.minutely_15?.precipitation?.[ti]) || 0)), // mm per 15 min
+    chance: (centre?.hourly?.time || []).map((t, i) => ({ t: `${t}:00Z`, p: centre.hourly.precipitation_probability?.[i] ?? null })),
+  };
+  forecastCache.set(key, { at: Date.now(), data });
+  return data;
+}
 async function schedule() {
   if (scheduleCache.data && Date.now() - scheduleCache.at < 6 * 3600e3) return scheduleCache.data;
   const r = await fetch('https://api.jolpi.ca/ergast/f1/current.json', { headers: { 'user-agent': 'pitwall-dashboard' } });
@@ -242,6 +271,29 @@ async function radio(req, res, clipPath) {
   res.end(buf);
 }
 
+// Driver photos, team logos and car pictures from F1's public image service,
+// cached on disk so they load instantly (also on the phone) and survive outages.
+const IMG_TRANSFORMS = { face: 'c_fill,w_160,h_160,g_face', logo: 'c_fit,h_64', car: 'c_fit,w_640' };
+async function f1Image(res, id, t) {
+  if (!/^common\/f1\/\d{4}\/[a-z0-9]+(\/[a-z0-9]+)?\/[a-z0-9]+$/.test(id) || !IMG_TRANSFORMS[t]) return sendJson(res, 400, { error: 'bad image id' });
+  const file = path.join(cacheDir, 'img', `${t}_${id.replace(/\//g, '_')}`);
+  let buf, type;
+  if (fs.existsSync(file) && fs.existsSync(`${file}.type`)) {
+    buf = fs.readFileSync(file);
+    type = fs.readFileSync(`${file}.type`, 'utf8');
+  } else {
+    const r = await fetch(`https://media.formula1.com/image/upload/${IMG_TRANSFORMS[t]}/q_auto/v1/${id}`, { headers: { 'user-agent': 'pitwall-dashboard' } }).catch(() => null);
+    if (!r?.ok) return sendJson(res, 404, { error: 'image unavailable' });
+    buf = Buffer.from(await r.arrayBuffer());
+    type = r.headers.get('content-type') || 'image/png';
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, buf);
+    fs.writeFileSync(`${file}.type`, type);
+  }
+  res.writeHead(200, { 'content-type': type, 'cache-control': 'max-age=604800' });
+  res.end(buf);
+}
+
 // ------------------------------------------------------------------ http
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -263,6 +315,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(text);
     }
     if (url.pathname === '/api/radio') return await radio(req, res, url.searchParams.get('path') || '');
+    if (url.pathname === '/api/img') return await f1Image(res, url.searchParams.get('id') || '', url.searchParams.get('t') || 'face');
     if (url.pathname === '/api/token' && req.method === 'POST') {
       // Only from this computer, never from other devices on the network.
       if (!isLocal(req)) return sendJson(res, 403, { error: 'Change this on the computer running Pit Wall.' });
@@ -294,6 +347,12 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { files });
     }
     if (url.pathname === '/api/history') return sendJson(res, 200, history.snapshot());
+    if (url.pathname === '/api/forecast') {
+      const lat = Number(url.searchParams.get('lat')), lon = Number(url.searchParams.get('lon'));
+      if (!(Math.abs(lat) <= 85) || !(Math.abs(lon) <= 180)) return sendJson(res, 400, { error: 'bad location' });
+      const data = await rainForecast(lat, lon).catch((e) => ({ error: e.message }));
+      return sendJson(res, data.error ? 502 : 200, data);
+    }
     if (url.pathname === '/api/radar') {
       // RainViewer's list of radar frames (last ~2 hours), cached for 2 minutes.
       if (!radarCache.data || Date.now() - radarCache.at > 120000) {
