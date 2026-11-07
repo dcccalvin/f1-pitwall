@@ -1,101 +1,129 @@
-/* Design tokens. Every colour, font and size the dashboard uses comes from here. */
+/* Design tokens. Every colour, font and size the dashboard uses comes from here.
+   Direction: printed timing sheet. Flat surfaces, hairline rules, one typeface.
+   The interface itself is greyscale; colour is reserved for data that means
+   something (team colours, purple/green times, flags, tyres). */
 
 @font-face { font-family: "Inter"; src: url("/fonts/Inter-var.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
-@font-face { font-family: "JetBrains Mono"; src: url("/fonts/JetBrainsMono-var.woff2") format("woff2"); font-weight: 100 800; font-display: swap; }
-@font-face { font-family: "Saira Condensed"; src: url("/fonts/SairaCondensed-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
-@font-face { font-family: "Saira Condensed"; src: url("/fonts/SairaCondensed-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "Saira Condensed"; src: url("/fonts/SairaCondensed-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
-@font-face { font-family: "Saira Condensed"; src: url("/fonts/SairaCondensed-800.woff2") format("woff2"); font-weight: 800; font-display: swap; }
 
-:root {
+:root, body[data-theme="dark"] {
   color-scheme: dark;
 
   /* surfaces */
-  --bg: #05070a;
-  --bg-grid: rgba(255, 255, 255, 0.022);
-  --panel: #0c1016;
-  --panel-top: #10151d;
-  --panel-2: #131922;
-  --panel-3: #1a212c;
-  --hover: rgba(255, 255, 255, 0.035);
-  --line: rgba(255, 255, 255, 0.065);
-  --line-2: rgba(255, 255, 255, 0.11);
-  --line-3: rgba(255, 255, 255, 0.18);
+  --bg: #0a0a0b;
+  --panel: #121213;
+  --panel-2: #19191b;
+  --panel-3: #222225;
+  --hover: #17171a;
+  --sel: #1f1f23;
+  --flash: rgba(255, 255, 255, 0.10);
+  --line: #232326;
+  --line-2: #303034;
+  --line-3: #4a4a50;
 
   /* text */
-  --text: #eef3f8;
-  --text-2: #a5b0bd;
-  --text-3: #6a7684;
-  --text-4: #414b57;
+  --text: #f1f0ec;
+  --text-2: #a7a7ac;
+  --text-3: #6d6d73;
+  --text-4: #46464c;
 
-  /* accent (UI chrome only; never carries timing meaning). Overridden by data-accent. */
-  --accent: #46d9f0;
-  --accent-2: #8a7dff;
-  --accent-ink: #031a1f;
+  /* accent: UI chrome only (selection, delay). "mono" = the text colour. */
+  --accent: #f1f0ec;
+  --accent-ink: #0a0a0b;
 
   /* timing colours */
-  --purple: #c07bff;
-  --green: #2fdc84;
-  --yellow: #f4c534;
-  --pit: #4b98ff;
-  --seg-empty: rgba(255, 255, 255, 0.07);
-  --gold: #ffcf5a;
+  --purple: #b468ff;
+  --green: #2fd26c;
+  --yellow: #f2c200;
+  --pit: #3d86ff;
+  --seg-empty: #2a2a2e;
 
   /* flags / track status */
-  --flag-green: #2fdc84;
-  --flag-yellow: #f6cb10;
-  --flag-red: #ff3d4a;
-  --flag-sc: #ff9a1f;
-  --flag-vsc: #ffb648;
-  --flag-blue: #3f8cff;
-  --flag-chequered: #f1f4f7;
+  --flag-green: #2fd26c;
+  --flag-yellow: #f2c200;
+  --flag-red: #ee3340;
+  --flag-sc: #ff8a00;
+  --flag-vsc: #ffa630;
+  --flag-blue: #3d86ff;
+  --flag-chequered: #f1f0ec;
 
   /* tyres */
-  --tyre-soft: #ff3b45;
-  --tyre-medium: #f6cb10;
-  --tyre-hard: #f1f4f7;
-  --tyre-inter: #34c759;
-  --tyre-wet: #2f86ff;
-  --tyre-unknown: #75808c;
+  --tyre-soft: #ee3340;
+  --tyre-medium: #f2c200;
+  --tyre-hard: #e9e8e4;
+  --tyre-inter: #2bb24c;
+  --tyre-wet: #3d86ff;
+  --tyre-unknown: #6d6d73;
 
   /* movement */
-  --up: #2fdc84;
-  --down: #ff5a64;
+  --up: #2fd26c;
+  --down: #ff5560;
 
-  /* type */
-  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-label: "Saira Condensed", "Arial Narrow", "Segoe UI", sans-serif;
-  --font-num: "JetBrains Mono", "Cascadia Mono", ui-monospace, Menlo, Consolas, monospace;
+  /* map */
+  --map-edge: #1d1d20;
+  --map-track: #3c3c41;
 
-  /* scale (density changes these) */
-  --fs-xs: 10.5px;
+  /* type: one family. Numbers use tabular figures so columns never jiggle. */
+  --font-ui: "Inter", "Helvetica Neue", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-num: "Inter", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --fs-xs: 11px;
   --fs-sm: 12px;
   --fs-md: 13.5px;
   --fs-lg: 16px;
-  --fs-xl: 22px;
-  --fs-tla: 17px;
-  --row-h: 36px;
-  --label-spacing: 0.1em;
+  --fs-xl: 24px;
+  --fs-tla: 14.5px;
+  --row-h: 34px;
 
   /* shape */
-  --radius: 14px;
-  --radius-sm: 8px;
-  --gap: 10px;
-  --topbar-h: 66px;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
-  --glow: 0 0 0 1px var(--line), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --radius: 3px;
+  --rule: 1px;
+  --topbar-h: 56px;
+  --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
-/* accent choices */
-body[data-accent="ice"]  { --accent: #b9d6ff; --accent-2: #7aa7ff; --accent-ink: #08162c; }
-body[data-accent="rose"] { --accent: #ff5c8a; --accent-2: #ff9b5c; --accent-ink: #2a0612; }
-body[data-accent="lime"] { --accent: #c6f45a; --accent-2: #4fe0b0; --accent-ink: #162200; }
-body[data-accent="violet"] { --accent: #a78bff; --accent-2: #46d9f0; --accent-ink: #120a2e; }
+body[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #e9e7e1;
+  --panel: #f7f6f2;
+  --panel-2: #efede7;
+  --panel-3: #e4e1d9;
+  --hover: #f0eee8;
+  --sel: #e7e4dc;
+  --flash: rgba(0, 0, 0, 0.08);
+  --line: #dcd9d1;
+  --line-2: #cbc8bf;
+  --line-3: #a9a59b;
+  --text: #141414;
+  --text-2: #4e4d4a;
+  --text-3: #85837d;
+  --text-4: #b3b0a8;
+  --accent: #141414;
+  --accent-ink: #f7f6f2;
+  --purple: #8a2be2;
+  --green: #128a3e;
+  --yellow: #b88a00;
+  --pit: #1f63e0;
+  --seg-empty: #dedbd3;
+  --flag-yellow: #e0b000;
+  --flag-chequered: #141414;
+  --tyre-hard: #b9b6ad;
+  --tyre-medium: #e0b000;
+  --up: #128a3e;
+  --down: #d42a36;
+  --map-edge: #e2dfd7;
+  --map-track: #a9a59b;
+  --shadow: 0 10px 28px rgba(40, 35, 25, 0.18);
+}
+
+/* accent choices (default: mono) */
+body[data-accent="blue"]   { --accent: #3d86ff; --accent-ink: #ffffff; }
+body[data-accent="orange"] { --accent: #ff6a1a; --accent-ink: #160700; }
+body[data-accent="lime"]   { --accent: #b6e835; --accent-ink: #131a00; }
 
 /* density */
-body[data-density="compact"] { --row-h: 29px; --fs-md: 12.5px; --fs-sm: 11.5px; --fs-tla: 15px; --fs-lg: 15px; }
-body[data-density="large"]   { --row-h: 46px; --fs-xs: 12px; --fs-sm: 14px; --fs-md: 16.5px; --fs-lg: 19px; --fs-xl: 27px; --fs-tla: 21px; }
+body[data-density="compact"] { --row-h: 28px; --fs-md: 12.5px; --fs-sm: 11.5px; --fs-tla: 13.5px; }
+body[data-density="large"]   { --row-h: 46px; --fs-xs: 12.5px; --fs-sm: 14px; --fs-md: 17px; --fs-lg: 19px; --fs-xl: 30px; --fs-tla: 19px; }
 
 @media (max-width: 900px) {
-  :root { --row-h: 42px; --topbar-h: 56px; --gap: 8px; --fs-tla: 17px; }
+  body[data-theme]:not([data-density="large"]) { --row-h: 42px; --fs-tla: 16px; }
+  body[data-theme] { --topbar-h: 52px; }
 }
