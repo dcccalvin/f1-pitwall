@@ -126,10 +126,11 @@ export class TrackMap {
     if (g) return g;
     const r = this.circuit.size * 0.019;
     g = svg('g', { class: 'car-dot', 'data-num': num });
+    const halo = svg('circle', { r: r * 1.5, class: 'halo', 'stroke-width': r * 0.28 });
     const circle = svg('circle', { r, fill: teamColor(d), 'stroke-width': r * 0.35 });
     const text = svg('text', { x: r * 1.45, y: r * 0.55, 'font-size': r * 2.1, 'stroke-width': r * 0.55 });
     text.textContent = d?.Tla || num;
-    g.append(circle, text);
+    g.append(halo, circle, text);
     this.carLayer.append(g);
     this.dots.set(num, g);
     return g;

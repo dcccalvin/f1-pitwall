@@ -63,7 +63,7 @@ const store = {
     t.className = `toast ${cls}`;
     t.textContent = text;
     document.getElementById('toasts').append(t);
-    setTimeout(() => t.remove(), cls ? 9000 : 5000);
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 280); }, cls ? 9000 : 5000);
   },
 
   notify(widget) { layout.notify(widget); },

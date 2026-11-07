@@ -186,6 +186,19 @@ export class Tower {
 
       const pos = l.Position || String(i + 1);
       this.#set(r, 'pos', r.pos, l.ShowPosition === false ? '' : esc(pos), `posn${i < 3 ? ` podium p${i + 1}` : ''}`);
+      // A car changed place: tint the row green/red for a moment as it slides.
+      const posNum = Number(pos);
+      if (r.prevPos && posNum && posNum !== r.prevPos) {
+        const up = posNum < r.prevPos;
+        r.el.classList.remove('gained', 'lost');
+        r.pos.classList.remove('gain', 'loss');
+        void r.el.offsetWidth;
+        r.el.classList.add(up ? 'gained' : 'lost');
+        r.pos.classList.add(up ? 'gain' : 'loss');
+        clearTimeout(r.moveT);
+        r.moveT = setTimeout(() => { r.el.classList.remove('gained', 'lost'); r.pos.classList.remove('gain', 'loss'); }, 2100);
+      }
+      r.prevPos = posNum;
 
       if (kind === 'race') {
         const grid = Number(app[num]?.GridPos);

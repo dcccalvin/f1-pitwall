@@ -10,6 +10,7 @@ export class Battles {
     this.root = document.getElementById('battles');
     this.hist = new Map(); // "ahead>behind" -> [{t, iv, lap}]
     this.key = '';
+    this.shown = new Map(); // pair -> interval last drawn (to animate new/changed)
   }
 
   reset() { this.hist.clear(); }
@@ -71,14 +72,19 @@ export class Battles {
         ${st ? `<span class="tyre sm ${esc(st.Compound)}">${compoundLetter(st.Compound)}</span>` : ''}
       </div>`;
     };
+    const before = this.shown;
+    this.shown = new Map(battles.map((x) => [`${x.a}>${x.b}`, x.iv]));
     this.root.innerHTML = battles.map((x) => {
+      const pair = `${x.a}>${x.b}`;
+      const isNew = before.size > 0 && !before.has(pair);
+      const changed = before.has(pair) && before.get(pair) !== x.iv;
       const attack = x.iv < 1.0;
       const tr = x.trend < -0.04 ? ['closing', `▼ ${Math.abs(x.trend).toFixed(2)}s`] : x.trend > 0.04 ? ['opening', `▲ ${x.trend.toFixed(2)}s`] : ['steady', 'steady'];
-      return `<div class="battle${attack ? ' attack' : ''}">
+      return `<div class="battle${attack ? ' attack' : ''}${isNew ? ' new' : ''}">
         <div class="b-head"><span class="b-pos">P${x.pos - 1} · P${x.pos}</span>${attack ? '<span class="b-tag">Within 1 s</span>' : ''}${x.laps ? `<span class="b-laps">${x.laps} lap${x.laps === 1 ? '' : 's'}</span>` : ''}</div>
         <div class="b-row">
           ${car(x.a, 'ahead')}
-          <div class="b-gap"><span class="b-iv">${x.iv.toFixed(3)}</span><span class="b-trend ${tr[0]}">${tr[1]}</span></div>
+          <div class="b-gap"><span class="b-iv${changed ? ' changed' : ''}">${x.iv.toFixed(3)}</span><span class="b-trend ${tr[0]}">${tr[1]}</span></div>
           ${car(x.b, 'behind')}
         </div>
         ${x.spark.length > 2 ? spark(x.spark) : ''}
