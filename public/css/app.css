@@ -147,7 +147,10 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
   box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 34px rgba(0,0,0,.28);
 }
 .group::before { content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 40%, transparent), transparent); opacity: .55; }
-.g-head { display: flex; align-items: center; gap: 6px; height: 42px; padding: 0 6px 0 8px; border-bottom: 1px solid var(--line); flex: none; }
+.g-head { display: flex; align-items: center; gap: 6px; height: 42px; padding: 0 6px 0 8px; border-bottom: 1px solid var(--line); flex: none; container-type: inline-size; }
+/* Narrow panels: inactive tabs collapse to icons (hover shows the name). */
+@container (max-width: 620px) { .g-tab:not(.active) span { display: none; } .g-tab:not(.active) { padding: 0 9px; } }
+@container (max-width: 380px) { .legend, .switch { display: none; } }
 .g-tabs { display: flex; align-items: stretch; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; height: 100%; }
 .g-tabs::-webkit-scrollbar { display: none; }
 .g-tab, .g-title {
@@ -288,7 +291,7 @@ body.dragging .group { transition: box-shadow .15s; }
   font-weight: 600; font-size: var(--fs-sm);
 }
 .btn:hover, .popover button:hover { border-color: var(--line-3); }
-.btn.primary, .popover button.primary { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--accent-2))); color: var(--accent-ink); border-color: transparent; }
+.btn.primary, .popover button.primary, .settings button.btn.primary { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--accent-2))); color: var(--accent-ink); border-color: transparent; }
 .btn.danger { color: var(--flag-red); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .switch { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font: 600 12.5px/1 var(--font-label); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; user-select: none; white-space: nowrap; }

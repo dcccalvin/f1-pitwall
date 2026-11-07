@@ -170,6 +170,7 @@ export class Layout {
       b.draggable = true;
       b.dataset.w = id;
       b.dataset.dot = id;
+      b.title = w.title;
       b.innerHTML = `${w.icon}<span>${esc(w.title)}</span>${id === 'telemetry' ? LOCK : ''}`;
       b.addEventListener('click', () => { g.active = id; this.dots.delete(id); this.save(); this.render(); this.store.dirty?.(); });
       b.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; this.dragging = id; document.body.classList.add('dragging'); });
