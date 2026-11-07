@@ -769,3 +769,10 @@ body[data-theme="dark"] .rd-base img { opacity: .9; }
 .rd-base img { filter: none; }
 body[data-theme="dark"] .rd-base img { opacity: 1; }
 .rd-legend[data-loading]:not([data-loading=""])::after { content: attr(data-loading); margin-left: 8px; color: var(--text-2); }
+
+/* map: cars fade in/out at the pits; follow mode dims the others */
+.car-dot { transition: opacity .45s var(--ease); }
+.car-dot.gone { opacity: 0; pointer-events: none; }
+.car-dot.faded { opacity: .38; }
+.car-dot.faded.leader { opacity: .55; }
+.mini-btn.on { background: var(--text); color: var(--bg); border-color: var(--text); }
