@@ -123,7 +123,8 @@ export function trackState(state) {
   if (phase === 'finished') {
     // Qualifying ends Q1 and Q2 with a chequered flag too; the session isn't over yet.
     const part = Number(state?.TimingData?.SessionPart) || 0;
-    if (sessionKind(state) === 'quali' && part && part < 3) return { key: 'chequered', label: `Q${part} over · Q${part + 1} next` };
+    const q = /sprint/i.test(state?.SessionInfo?.Name || '') ? 'SQ' : 'Q';
+    if (sessionKind(state) === 'quali' && part && part < 3) return { key: 'chequered', label: `${q}${part} over · ${q}${part + 1} next` };
     return { key: 'chequered', label: 'Chequered flag' };
   }
   if (phase === 'suspended') {
