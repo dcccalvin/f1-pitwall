@@ -215,16 +215,15 @@ export class TrackMap {
         const g = this.gps.pos(num, now);
         if (g && !(g.x === 0 && g.y === 0)) p = rotate(g.x, g.y, this.circuit.rot, this.circuit.cx, this.circuit.cy);
       } else if (!l.InPit && !l.Retired && !l.Stopped) {
-        const f = this.est.frac(num, now, s, slow);
-        if (f != null) {
+        // Continuous progress in laps (never wraps), so easing never runs the wrong way round.
+        const target = this.est.progress(num, now, s, slow);
+        if (target != null) {
           let disp = this.display.get(num);
-          if (disp == null) disp = f;
-          let diff = f - disp;
-          if (diff > 0.5) diff -= 1; else if (diff < -0.5) diff += 1;
-          disp = Math.abs(diff) > 0.15 ? f : disp + diff * Math.min(1, dt * 5);
-          disp = ((disp % 1) + 1) % 1;
+          // Only jump for a genuinely new position (first sight, back from the garage).
+          if (disp == null || Math.abs(target - disp) > 0.35) disp = target;
+          else disp += (target - disp) * (1 - Math.exp(-dt * 7)); // smooth, frame-rate independent
           this.display.set(num, disp);
-          p = this.#pointAt(disp);
+          p = this.#pointAt(((disp % 1) + 1) % 1);
         }
       }
       const hidden = !p || (l.InPit && !live) || (kind(s) !== 'race' && l.InPit);

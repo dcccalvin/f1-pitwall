@@ -6,6 +6,12 @@
 // With F1 TV, GpsTracker interpolates the real X/Y positions instead.
 import { parseLap } from './format.js';
 
+// The map is drawn LAG ms behind the timing data so that, almost always, the
+// timing loop a car is heading for has already been crossed: positions are then
+// interpolated between two known points (smooth) instead of guessed and
+// corrected (jumpy). Loops are ~3 s apart, so ~3.5 s of lag covers the gap.
+const LAG = 3500;
+
 export class EstimatedTracker {
   constructor() {
     this.cars = new Map();
@@ -24,7 +30,7 @@ export class EstimatedTracker {
 
   #car(num) {
     let c = this.cars.get(num);
-    if (!c) { c = { anchorT: null, anchorF: 0, inPit: false, display: null }; this.cars.set(num, c); }
+    if (!c) { c = { hist: [], inPit: false }; this.cars.set(num, c); }
     return c;
   }
 
@@ -63,6 +69,21 @@ export class EstimatedTracker {
     return 1;
   }
 
+  /** Record that car passed lap fraction `frac` at time t, as continuous progress (laps). */
+  #anchor(c, t, frac) {
+    frac = frac >= 0.9999 ? 0 : frac;
+    const last = c.hist.at(-1);
+    let p = frac;
+    if (last) {
+      p = Math.floor(last.p) + frac;
+      if (p < last.p - 0.5) p += 1;          // crossed the line into a new lap
+      if (p < last.p) return;                 // stale / out-of-order update
+      if (p - last.p > 1.5) c.hist = [];      // long gap (garage): start fresh
+    }
+    c.hist.push({ t, p });
+    if (c.hist.length > 12) c.hist.shift();
+  }
+
   /** Seed from a full state (on connect / delay change): last filled loop per car. */
   reset(state, at) {
     this.cars.clear();
@@ -76,7 +97,7 @@ export class EstimatedTracker {
         const segs = Array.isArray(sec?.Segments) ? sec.Segments : Object.values(sec?.Segments || {});
         segs.forEach((g, j) => { if (g?.Status) { const f = this.loopFrac(s, j); if (far == null || f > far) far = f; } });
       });
-      if (far != null) { c.anchorT = at; c.anchorF = far >= 0.9999 ? 0 : far; }
+      if (far != null) this.#anchor(c, at - LAG, far);
     }
   }
 
@@ -97,19 +118,45 @@ export class EstimatedTracker {
         }
       }
       if (l.NumberOfLaps !== undefined && far == null) far = 1;
-      if (far != null) { c.anchorT = t; c.anchorF = far >= 0.9999 ? 0 : far; }
+      if (far != null) this.#anchor(c, t, far);
     }
   }
 
-  /** Lap fraction (0..1, time-based) of a car at time `now`, or null. */
-  frac(num, now, state, slow = 1) {
+  /**
+   * Continuous progress (laps, e.g. 12.37) of a car at play-time `now`, or null.
+   * Interpolates between the timing loops around (now - LAG); only extrapolates
+   * (gently, never past the next loop) when the car is late reaching a loop.
+   */
+  progress(num, now, state, slow = 1) {
     const c = this.cars.get(num);
-    if (!c || c.anchorT == null) return null;
-    const lapT = this.#lapTime(num, state) * slow;
-    let f = c.anchorF + (now - c.anchorT) / 1000 / lapT;
-    const cap = this.nextLoop(c.anchorF);
-    if (f > cap) f = cap - 0.002; // don't run past a loop we haven't heard about yet
-    return ((f % 1) + 1) % 1;
+    if (!c || !c.hist.length) return null;
+    const h = c.hist;
+    const T = now - LAG;
+    if (T <= h[0].t) return h[0].p;
+    let i = h.length - 1;
+    while (i > 0 && h[i].t > T) i--;
+    const a = h[i], b = h[i + 1];
+    if (b) return a.p + ((b.p - a.p) * (T - a.t)) / Math.max(1, b.t - a.t);
+    // Past the newest loop: carry on at the car's recent pace, easing to a stop
+    // just short of the next loop rather than running through it.
+    const v = this.#pace(c, num, state) / slow; // laps per ms
+    const capF = this.nextLoop(a.p - Math.floor(a.p));
+    const cap = Math.floor(a.p) + capF;
+    const room = Math.max(0, cap - a.p - 0.002);
+    const free = v * (T - a.t);
+    return a.p + room * (1 - Math.exp(-free / Math.max(room, 1e-6)));
+  }
+
+  /** Recent pace in laps/ms: from the last two loops, sanity-checked against lap time. */
+  #pace(c, num, state) {
+    const nominal = 1 / (this.#lapTime(num, state) * 1000);
+    const h = c.hist;
+    if (h.length >= 2) {
+      const a = h[h.length - 2], b = h[h.length - 1];
+      const v = (b.p - a.p) / Math.max(1, b.t - a.t);
+      if (v > nominal * 0.35 && v < nominal * 1.8) return v;
+    }
+    return nominal;
   }
 
   #lapTime(num, state) {
