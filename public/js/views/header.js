@@ -124,7 +124,7 @@ export class Header {
     const st = this.store.status || {};
     const state = !this.store.connected ? 'reconnecting' : st.state || 'connecting';
     $('conn').dataset.state = state;
-    $('conn-label').textContent = { live: 'Live', demo: 'Demo', replay: 'Replay', connecting: 'Connecting', reconnecting: 'Reconnecting', error: 'Feed error', disconnected: 'Offline', starting: 'Starting' }[state] || state;
+    $('conn-label').textContent = { live: 'Live', demo: 'Demo', replay: 'Replay', connecting: 'Connecting', reconnecting: 'Reconnecting', offline: 'No internet', error: 'Feed error', disconnected: 'Offline', starting: 'Starting' }[state] || state;
     const f1tv = !!st.f1tv;
     $('data-badge').textContent = f1tv ? 'F1 TV data' : 'Free data';
     $('data-badge').classList.toggle('f1tv', f1tv);

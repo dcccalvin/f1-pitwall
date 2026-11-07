@@ -1,6 +1,6 @@
 // Pit Wall front end: one websocket, one state object, views that redraw on change.
 import { applyMessage } from './merge.js';
-import { parseLap, esc, fmtClock } from './format.js';
+import { parseLap, esc, fmtClock, sessionPhase } from './format.js';
 import { EstimatedTracker, GpsTracker } from './tracker.js';
 import { Layout, WIDGETS, PRESETS } from './layout.js';
 import { Header } from './views/header.js';
@@ -192,11 +192,27 @@ function send(msg) {
   if (store.ws?.readyState === 1) store.ws.send(JSON.stringify(msg));
 }
 
+// ------------------------------------------------------------------ connection
+// This screen <-> Pit Wall on the laptop. Reconnects by itself (and immediately
+// when the device comes back online or the phone wakes up).
 let retry = 500;
+let retryTimer = null;
+store.wsDownSince = null;
+store.lastDataAt = null;
+
 function connect() {
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  if (store.ws && store.ws.readyState <= 1) return; // already connecting / open
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   store.ws = ws;
-  ws.onopen = () => { store.connected = true; retry = 500; dirty.add('*'); };
+  ws.onopen = () => {
+    store.connected = true;
+    retry = 500;
+    if (store.wsDownSince && Date.now() - store.wsDownSince > 4000) store.toast('Reconnected to Pit Wall. Timing is up to date.', 'ok');
+    store.wsDownSince = null;
+    dirty.add('*');
+  };
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === 'hello') {
@@ -207,18 +223,60 @@ function connect() {
       dirty.add('*');
     } else if (m.type === 'state') onState(m);
     else if (m.type === 'msgs') onMsgs(m.msgs);
-    else if (m.type === 'status') { store.status = m.status; dirty.add('*'); }
-    else if (m.type === 'toast') store.toast(m.text);
+    else if (m.type === 'status') {
+      const was = store.status?.state;
+      store.status = m.status;
+      if (m.status?.recoveredAfter) store.toast(`Back online after ${fmtClock(m.status.recoveredAfter / 1000)}. Timing caught up.`, 'ok');
+      else if (was === 'live' && (m.status?.state === 'offline' || m.status?.state === 'reconnecting')) dirty.add('*');
+      dirty.add('*');
+    } else if (m.type === 'ping') {
+      store.lastDataAt = m.lastDataAt;
+      store.clockOffset = store.clockOffset * 0.8 + (m.serverNow - Date.now()) * 0.2;
+    } else if (m.type === 'toast') store.toast(m.text);
   };
   ws.onclose = () => {
+    if (store.ws !== ws) return;
     store.connected = false;
+    if (!store.wsDownSince) store.wsDownSince = Date.now();
     dirty.add('*');
-    setTimeout(connect, retry);
-    retry = Math.min(8000, retry * 1.6);
+    retryTimer = setTimeout(connect, retry);
+    retry = Math.min(5000, retry * 1.6);
   };
 }
 if (!Number.isFinite(store.delay)) store.delay = 0;
 connect();
+// Don't wait for the next retry when the network or the screen comes back.
+window.addEventListener('online', () => { retry = 500; connect(); dirty.add('*'); });
+window.addEventListener('offline', () => dirty.add('*'));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !store.connected) { retry = 500; connect(); } });
+
+// ------------------------------------------------------------------ connection warning bar
+const netbar = document.getElementById('netbar');
+function renderNetbar() {
+  const st = store.status || {};
+  const now = Date.now();
+  const serverNow = now + store.clockOffset;
+  const ago = (t) => fmtClock(Math.max(0, (serverNow - t) / 1000));
+  let text = '', cls = '';
+  if (!navigator.onLine) {
+    text = 'This device is offline. Timing will resume when it reconnects.'; cls = 'bad';
+  } else if (!store.connected && store.wsDownSince && now - store.wsDownSince > 2500) {
+    const long = now - store.wsDownSince > 15000;
+    text = `Lost the connection to Pit Wall on your laptop · reconnecting… ${long ? '(is the Pit Wall window still open, and is this device on the same Wi-Fi?)' : ''}`; cls = 'bad';
+  } else if (st.mode === 'live' && st.state === 'offline') {
+    const retryIn = st.retryAt ? Math.max(0, Math.ceil((st.retryAt - serverNow) / 1000)) : null;
+    text = `Internet connection lost on the laptop · retrying${retryIn != null ? ` in ${retryIn}s` : ''} · down ${st.downSince ? ago(st.downSince) : ''}. Timing below is frozen.`; cls = 'bad';
+  } else if (st.mode === 'live' && (st.state === 'reconnecting' || st.state === 'connecting') && st.downSince) {
+    text = `Connection to F1 interrupted (${st.detail || 'reconnecting'}) · reconnecting automatically · down ${ago(st.downSince)}`; cls = 'warn';
+  } else if (st.mode === 'live' && st.state === 'live' && store.lastDataAt && serverNow - store.lastDataAt > 40000 && ['running', 'suspended', 'paused'].includes(sessionPhase(store.state))) {
+    text = `No data from F1 for ${ago(store.lastDataAt)} · will reconnect automatically if this continues`; cls = 'warn';
+  }
+  netbar.hidden = !text;
+  netbar.className = `netbar ${cls}`;
+  const span = netbar.querySelector('span');
+  if (span.textContent !== text) span.textContent = text;
+}
+setInterval(renderNetbar, 1000);
 
 // ------------------------------------------------------------------ render loop
 let lastUpdate = 0;
