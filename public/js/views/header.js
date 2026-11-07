@@ -3,6 +3,13 @@ import { esc, trackState, sessionKind, parseClock, fmtClock, driverOrder } from 
 
 const $ = (id) => document.getElementById(id);
 
+/** Restart a CSS animation class on an element. */
+function retrigger(el, cls) {
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
 export class Header {
   constructor(store) {
     this.store = store;
@@ -47,14 +54,23 @@ export class Header {
     badge.textContent = mode === 'demo' ? 'Demo' : 'Replay';
 
     const ts = trackState(s);
-    document.body.dataset.track = ts.key;
-    $('track-label').textContent = ts.label;
+    if (document.body.dataset.track !== ts.key) {
+      const first = !this.seenTrack;
+      document.body.dataset.track = ts.key;
+      if (!first) retrigger($('track-pill'), 'enter');
+      this.seenTrack = true;
+    }
+    if ($('track-label').textContent !== ts.label) $('track-label').textContent = ts.label;
 
     const kind = sessionKind(s);
     if (kind === 'race' && s.LapCount) {
       $('lc-label').textContent = 'Lap';
       const html = `${esc(s.LapCount.CurrentLap ?? '–')}<small>/${esc(s.LapCount.TotalLaps ?? '–')}</small>`;
-      if ($('lc-value').innerHTML !== html) $('lc-value').innerHTML = html;
+      if ($('lc-value').innerHTML !== html) {
+        const had = $('lc-value').innerHTML.includes('<small>');
+        $('lc-value').innerHTML = html;
+        if (had) retrigger($('lc-value'), 'tick'); // the lap counter ticks over
+      }
       const pct = (Number(s.LapCount.CurrentLap) - 1) / (Number(s.LapCount.TotalLaps) || 1);
       $('lc-bar').style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`;
       this.clockMode = false;

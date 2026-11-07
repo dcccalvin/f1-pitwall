@@ -140,7 +140,14 @@ export class Telemetry {
       const v = this.#at(this.pick[card.dataset.card], at);
       if (!v) return;
       card.querySelector('.sp').textContent = Math.round(v.speed);
-      card.querySelector('.tl-gear').textContent = v.gear || 'N';
+      const gearEl = card.querySelector('.tl-gear');
+      const gear = String(v.gear || 'N');
+      if (gearEl.textContent !== gear) { // gear shift ticks
+        gearEl.textContent = gear;
+        gearEl.classList.remove('shift');
+        void gearEl.offsetWidth;
+        gearEl.classList.add('shift');
+      }
       const bars = card.querySelectorAll('.tl-bar');
       bars[0].querySelector('i').style.width = `${Math.min(100, v.thr)}%`;
       bars[0].querySelector('.v').textContent = `${Math.round(Math.min(100, v.thr))}%`;
