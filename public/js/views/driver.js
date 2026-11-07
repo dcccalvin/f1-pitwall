@@ -2,6 +2,8 @@
 // (timing tower, map, battles, radio, moments, race control) to follow them here.
 import { esc, teamColor, sessionKind, segClass, driverOrder, currentStint, stintList, compoundLetter, parseLap, fmtLap, sessionLocalTime, trackState } from '../format.js';
 import { gapSeconds } from '../history.js';
+import { penalties, penaltyBadge } from '../penalties.js';
+import { avatar, teamLogo, carImage, img } from '../media.js';
 
 const COMP_COLOR = { SOFT: 'var(--tyre-soft)', MEDIUM: 'var(--tyre-medium)', HARD: 'var(--tyre-hard)', INTERMEDIATE: 'var(--tyre-inter)', WET: 'var(--tyre-wet)' };
 const list = (raw) => (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(Boolean);
@@ -71,6 +73,7 @@ export class DriverPanel {
     // team radio from this driver
     const clips = list(s.TeamRadio?.Captures).filter((c) => String(c.RacingNumber) === String(num)).slice(-6).reverse();
 
+    const pens = penalties(s, this.store.history);
     const grid = Number(s.TimingAppData?.Lines?.[num]?.GridPos);
     const gained = kind === 'race' && grid ? grid - Number(l.Position) : null;
     const status = l.Retired ? 'Retired' : l.Stopped ? 'Stopped' : l.KnockedOut ? `Out in Q${part - 1 || 1}` : l.InPit ? 'In the pits' : l.PitOut ? 'Out lap' : '';
@@ -87,7 +90,10 @@ export class DriverPanel {
       stints: stintList(s, num).map((x) => [x.Compound, Math.max(0, (Number(x.TotalLaps) || 0) - (Number(x.StartLaps) || 0)), x.New === 'true' || x.New === true]),
       mentions: mentions.slice(-6).reverse().map((m) => [m.Utc, m.Message]),
       clips: clips.map((c) => [c.Path, c.Utc]),
-      context: this.#context(s, kind, num, l, part, order, bestLap),
+      context: this.#context(s, kind, num, l, part, order, bestLap, kind === 'race' ? pens : {}),
+      penalty: penaltyBadge(pens[num]),
+      penaltyItems: (pens[num]?.items || []).map((x) => [x.kind, x.secs, x.served || '']),
+      pid: d.PublicIdRight || d.HeadshotUrl || '', theme: document.body.dataset.theme,
       follow: !!this.store.map?.follow, alerts: !!this.store.alerts,
     };
     const key = JSON.stringify(model);
@@ -97,7 +103,7 @@ export class DriverPanel {
   }
 
   /** Session-specific insight: qualifying cut-off margin, or race pit-stop rejoin estimate. */
-  #context(s, kind, num, l, part, order, bestLap) {
+  #context(s, kind, num, l, part, order, bestLap, pens = {}) {
     const lines = s.TimingData?.Lines || {};
     const dl = s.DriverList || {};
     if (kind === 'quali') {
@@ -120,7 +126,9 @@ export class DriverPanel {
       const loss = Number(ts === 'sc' ? pl.sc : ts.startsWith('vsc') ? pl.vsc : pl.normal);
       const myGap = gapSeconds(l.GapToLeader);
       if (myGap == null || !isFinite(loss)) return null;
-      const target = myGap + loss;
+      // An unserved time penalty is served stationary at the next stop: it adds to the loss.
+      const owed = pens[num]?.pending || 0;
+      const target = myGap + loss + owed;
       let pos = 1, front = null, back = null;
       for (const n of order) {
         if (n === num) continue;
@@ -133,7 +141,23 @@ export class DriverPanel {
       const parts = [`Pit now → rejoin around P${pos}`];
       if (front) parts.push(`${(target - front.g).toFixed(1)} s behind ${dl[front.n]?.Tla || front.n}`);
       if (back) parts.push(`${(back.g - target).toFixed(1)} s ahead of ${dl[back.n]?.Tla || back.n}`);
-      return { kind: 'race', text: parts.join(' · '), note: `Pit loss ${loss.toFixed(1)} s${ts === 'sc' ? ' under the safety car' : ts.startsWith('vsc') ? ' under the VSC' : ''} · estimate` };
+      // Where they'd finish if the race ended now, with everyone's unserved time penalties added.
+      let finish = '';
+      if (Object.values(pens).some((p) => p.pending)) {
+        const eff = myGap + owed;
+        let p2 = 1;
+        for (const n of order) {
+          if (n === num) continue;
+          const o = lines[n];
+          if (!o || o.Retired) continue;
+          const g = gapSeconds(o.GapToLeader);
+          if (g != null && g + (pens[n]?.pending || 0) < eff) p2++;
+        }
+        finish = ` · if it ended now with penalties applied: P${p2}`;
+      }
+      const under = ts === 'sc' ? ' under the safety car' : ts.startsWith('vsc') ? ' under the VSC' : '';
+      const note = `Pit loss ${loss.toFixed(1)} s${under}${owed ? ` + ${owed} s penalty served at the stop` : ''} · estimate${finish}`;
+      return { kind: 'race', text: parts.join(' · '), note };
     }
     return null;
   }
@@ -145,8 +169,10 @@ export class DriverPanel {
     const lapsTimed = m.laps.filter((x) => x[1]);
     return `
       <div class="dv-head" style="--tc:${m.color}">
+        ${img(carImage(s.DriverList?.[m.num]), 'dv-car')}
         <div class="dv-pos">${esc(m.pos || '–')}</div>
-        <div class="dv-who"><b>${esc(m.tla || m.num)}</b><span>${esc(m.name || '')} · #${esc(m.num)} · ${esc(m.team || '')}</span></div>
+        ${avatar(s.DriverList?.[m.num], 'av av-lg')}
+        <div class="dv-who"><b>${esc(m.tla || m.num)}${m.penalty ? ` <em class="d-pen">${esc(m.penalty)}</em>` : ''}</b><span>${esc(m.name || '')} · #${esc(m.num)} · ${img(teamLogo(s.DriverList?.[m.num]), 'dv-logo')}${esc(m.team || '')}</span></div>
         ${m.status ? `<span class="dv-status">${esc(m.status)}</span>` : ''}
         <div class="dv-actions">
           <button class="mini-btn${m.follow ? ' on' : ''}" data-act="follow" title="Zoom the track map onto this driver">Follow on map</button>
@@ -167,6 +193,7 @@ export class DriverPanel {
         ${cell('Speed trap', m.trapBest ? `${esc(m.trapBest)} km/h` : '–', '', m.trapRank ? `P${esc(m.trapRank)} fastest · last ${esc(m.trap || '–')}` : '')}
         ${kind === 'race' ? cell('Since start', m.gained == null ? '–' : m.gained > 0 ? `▲ ${m.gained}` : m.gained < 0 ? `▼ ${-m.gained}` : 'No change', m.gained > 0 ? 'up' : m.gained < 0 ? 'down' : '') : ''}
         ${cell('Track limits', m.strikes ? `${m.strikes} strike${m.strikes > 1 ? 's' : ''}` : 'Clean', m.strikes >= 3 ? 'bad' : '', m.bw ? 'Black-and-white flag shown' : m.strikes ? 'Lap times deleted' : '')}
+        ${m.penaltyItems.length ? cell('Penalties', m.penalty ? `${esc(m.penalty)} owed` : 'All served', m.penalty ? 'bad' : '', m.penaltyItems.map(([k, sec, served]) => `${k === 'time' ? `${sec} s time` : k === 'dt' ? 'Drive-through' : `${sec} s stop/go`}${served === 'withdrawn' ? ' (withdrawn)' : served ? ' (served)' : ''}`).join(' · ')) : ''}
       </div>
       <div class="dv-sec"><div class="dv-h">Sectors</div><div class="dv-sectors">
         ${[0, 1, 2].map((k) => { const x = m.sectors[k] || { segs: [] }; return `<div><div class="dv-k">S${k + 1}</div><div class="segs">${x.segs.map((c) => `<i class="${c}"></i>`).join('')}</div><div class="dv-v ${x.cls}">${esc(x.v || '–')}</div><div class="dv-sub">best ${esc(x.pb || '–')}${x.pbRank ? ` · P${esc(x.pbRank)}` : ''}</div></div>`; }).join('')}
@@ -185,7 +212,7 @@ export class DriverPanel {
     this.key = key;
     this.root.innerHTML = order.length
       ? `<div class="dv-empty"><b>Pick a driver to follow</b><span>Or click one anywhere: timing tower, track map, battles, radio or moments.</span>
-          <div class="dv-pick">${order.map((n) => `<button data-pick="${esc(n)}" style="--tc:${teamColor(dl[n])}">${esc(dl[n]?.Tla || n)}</button>`).join('')}</div></div>`
+          <div class="dv-pick">${order.map((n) => `<button data-pick="${esc(n)}" style="--tc:${teamColor(dl[n])}">${avatar(dl[n], 'av')}<span>${esc(dl[n]?.Tla || n)}</span></button>`).join('')}</div></div>`
       : '<div class="feed-empty">Waiting for a session…</div>';
   }
 }

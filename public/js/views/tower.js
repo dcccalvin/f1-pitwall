@@ -1,6 +1,8 @@
 // Timing tower: one absolutely-positioned row per car so position changes slide.
 // Columns are user-selectable and auto-hide by priority when the panel is narrow.
 import { esc, teamColor, sessionKind, segClass, driverOrder, currentStint, compoundLetter, parseLap } from '../format.js';
+import { penalties, penaltyBadge } from '../penalties.js';
+import { avatar } from '../media.js';
 
 // prio: higher = kept longer when space runs out. min = px needed.
 const COLUMNS = [
@@ -16,7 +18,7 @@ const COLUMNS = [
   { id: 'speed', label: 'Trap', w: '46px', min: 46, prio: 1, title: 'Speed trap (km/h)', off: true },
   { id: 'pits', label: 'Pit', w: '38px', min: 38, prio: 2 },
 ];
-const LABELS = { delta: 'Places gained', tyre: 'Tyre & age', gap: 'Gap to leader', int: 'Interval', last: 'Last lap', best: 'Best lap', sectors: 'Sector times', minis: 'Mini-sectors', speed: 'Speed trap', pits: 'Pit stops / laps' };
+const LABELS = { photos: 'Driver photos', delta: 'Places gained', tyre: 'Tyre & age', gap: 'Gap to leader', int: 'Interval', last: 'Last lap', best: 'Best lap', sectors: 'Sector times', minis: 'Mini-sectors', speed: 'Speed trap', pits: 'Pit stops / laps' };
 
 export class Tower {
   constructor(store) {
@@ -28,7 +30,7 @@ export class Tower {
     this.pop = document.getElementById('cols-pop');
     this.rows = new Map();
     this.kind = null;
-    this.prefs = { ...Object.fromEntries(COLUMNS.filter((c) => !c.fixed).map((c) => [c.id, !c.off])), minis: true, autofit: true, autoheight: true, ...JSON.parse(localStorage.getItem('towerCols') || '{}') };
+    this.prefs = { ...Object.fromEntries(COLUMNS.filter((c) => !c.fixed).map((c) => [c.id, !c.off])), minis: true, photos: true, autofit: true, autoheight: true, ...JSON.parse(localStorage.getItem('towerCols') || '{}') };
     this.rowH = null;
     this.colKey = '';
     this.body.addEventListener('click', (e) => {
@@ -84,12 +86,13 @@ export class Tower {
       while (need() > avail && drop.length) { const d = drop.shift(); cols = cols.filter((c) => c !== d); }
     }
     const ids = new Set(cols.map((c) => c.id));
-    const key = [...ids].join() + (this.prefs.minis ? '+m' : '');
+    const key = [...ids].join() + (this.prefs.minis ? '+m' : '') + (this.prefs.photos ? '+p' : '');
     if (key === this.colKey) return;
     this.colKey = key;
     this.root.style.setProperty('--cols', cols.map((c) => c.w).join(' '));
     for (const c of COLUMNS) this.root.classList.toggle(`hide-${c.id}`, !ids.has(c.id));
     this.root.classList.toggle('no-minis', !this.prefs.minis);
+    this.root.classList.toggle('no-photos', !this.prefs.photos);
   }
 
   #renderHead(kind) {
@@ -111,7 +114,7 @@ export class Tower {
     e.innerHTML = `
       <div class="c-pos"><span class="posn"></span></div>
       <div class="c-delta"></div>
-      <div class="c-driver"><span class="d-tla"></span><span class="d-num"></span><span class="d-name"></span><span class="d-badge" hidden></span></div>
+      <div class="c-driver"><span class="d-av"></span><span class="d-tla"></span><span class="d-num"></span><span class="d-name"></span><span class="d-pen" hidden title="Penalty not served yet"></span><span class="d-badge" hidden></span></div>
       <div class="c-tyre"><span class="tyre"></span><span class="tyre-age"></span></div>
       <div class="c-num c-gap r"></div>
       <div class="c-num c-int r"></div>
@@ -126,7 +129,7 @@ export class Tower {
     const q = (s) => e.querySelector(s);
     r = {
       el: e, cache: {},
-      pos: q('.posn'), delta: q('.c-delta'), num: q('.d-num'), tla: q('.d-tla'), name: q('.d-name'), badge: q('.d-badge'),
+      pos: q('.posn'), delta: q('.c-delta'), num: q('.d-num'), tla: q('.d-tla'), name: q('.d-name'), badge: q('.d-badge'), pen: q('.d-pen'), av: q('.d-av'),
       tyre: q('.tyre'), age: q('.tyre-age'), gap: q('.c-gap'), int: q('.c-int'), last: q('.c-last'), best: q('.c-best'),
       sectors: [...e.querySelectorAll('.c-sec')].map((s) => ({ segs: s.querySelector('.segs'), v: s.querySelector('.sec-v') })),
       speed: q('.c-speed'), pits: q('.c-pits'),
@@ -168,6 +171,7 @@ export class Tower {
     const total = order.length;
     const advance = kind === 'quali' && part < 3 ? (Number(entries?.[part]) || (part === 1 ? (total >= 22 ? 16 : 15) : 10)) : null;
 
+    const pens = kind === 'race' ? penalties(s, this.store.history) : {};
     const seen = new Set();
     order.forEach((num, i) => {
       seen.add(num);
@@ -210,6 +214,9 @@ export class Tower {
       this.#set(r, 'num', r.num, esc(d.RacingNumber || num), 'd-num');
       this.#set(r, 'tla', r.tla, esc(d.Tla || num), 'd-tla');
       this.#set(r, 'name', r.name, esc(d.LastName || ''), 'd-name');
+      if (r.cache.avKey !== (d.PublicIdRight || d.HeadshotUrl)) { r.cache.avKey = d.PublicIdRight || d.HeadshotUrl; r.av.innerHTML = avatar(d, 'av'); }
+      const pb = penaltyBadge(pens[num]);
+      if (r.cache.pen !== pb) { r.cache.pen = pb; r.pen.hidden = !pb; r.pen.textContent = pb; }
 
       let badge = '', bcls = 'd-badge';
       if (l.Retired) { badge = kind === 'race' ? 'DNF' : 'OUT'; bcls += ' out'; }
@@ -239,7 +246,8 @@ export class Tower {
         gap = l.TimeDiffToFastest ?? '';
         int = l.TimeDiffToPositionAhead ?? '';
       }
-      const isLead = i === 0 || /^LAP/i.test(gap);
+      const isLead = i === 0;
+      if (!isLead && /^LAP/i.test(gap)) gap = ''; // a stale "LAP n" left on a car that dropped from P1
       const iv = parseLap(String(int).replace('+', ''));
       const attack = kind === 'race' && !isLead && iv != null && iv < 1.0 && !l.InPit;
       const gapHtml = isLead ? `<span class="lead">${kind === 'race' ? 'Leader' : (esc(gap) || 'Fastest')}</span>` : esc(gap);

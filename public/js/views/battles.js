@@ -1,6 +1,7 @@
 // Battles: cars within 1.5 s of the car ahead, with closing/opening trend and a
 // sparkline of the interval. Under 1.0 s is "attack range" (2026 overtake mode).
 import { esc, teamColor, driverOrder, sessionKind, currentStint, compoundLetter, parseLap } from '../format.js';
+import { avatar } from '../media.js';
 
 const RANGE = 1.5;
 
@@ -68,7 +69,7 @@ export class Battles {
       const d = dl[num] || {};
       const st = currentStint(s, num);
       return `<div class="b-car ${cls}" style="--tc:${teamColor(d)}" data-num="${esc(num)}" data-select="${esc(num)}" title="Follow ${esc(d.Tla || num)}">
-        <i class="b-bar"></i><div class="b-who"><b>${esc(d.Tla || num)}</b><span>${esc(d.LastName || '')}</span></div>
+        <i class="b-bar"></i>${avatar(d, 'av')}<div class="b-who"><b>${esc(d.Tla || num)}</b><span>${esc(d.LastName || '')}</span></div>
         ${st ? `<span class="tyre sm ${esc(st.Compound)}">${compoundLetter(st.Compound)}</span>` : ''}
       </div>`;
     };
