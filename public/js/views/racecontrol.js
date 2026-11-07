@@ -1,5 +1,5 @@
 // Race control messages, newest first, with flag/penalty chips and toasts for big moments.
-import { esc, sessionLocalTime } from '../format.js';
+import { esc, sessionLocalTime, trackLocalToUtc } from '../format.js';
 
 function classify(m) {
   const msg = m.Message || '';
@@ -21,6 +21,7 @@ function classify(m) {
   if (/DELETED|TRACK LIMITS/.test(msg)) return ['limits', 'Track limits'];
   if (/RAIN|WET/.test(msg)) return ['blue', 'Weather'];
   if (/PIT EXIT|PIT ENTRY/.test(msg)) return ['', 'Pit lane'];
+  if (/WILL (RESUME|RESTART|START)|WILL NOT RESUME/.test(msg)) return ['resume', 'Restart'];
   return ['', 'Info'];
 }
 
@@ -62,6 +63,14 @@ export class RaceControl {
     const msgs = Array.isArray(data?.Messages) ? data.Messages : Object.values(data?.Messages || {});
     for (const m of msgs) {
       if (!m) continue;
+      // "Q1 WILL RESUME AT 16:26": also say when that is for the viewer.
+      const r = /(RESUME|RESTART|START)\w*\s+(?:AT|AROUND)\s+(\d{1,2})[:.](\d{2})/i.exec(m.Message || '');
+      if (r) {
+        const utc = trackLocalToUtc(r[2], r[3], m.Utc, this.store.state.SessionInfo?.GmtOffset);
+        const yours = new Date(utc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        this.store.toast(`${m.Message} track time (${yours} your time)`, 'resume');
+        continue;
+      }
       const [cls, label] = classify(m);
       if (cls === 'sc' || cls === 'red' || cls === 'penalty' || cls === 'chequered') {
         this.store.toast(`${label}: ${m.Message}`, cls === 'chequered' ? '' : cls);

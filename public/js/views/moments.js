@@ -62,7 +62,7 @@ export class Moments {
     if (topic === 'RaceControlMessages') {
       const msgs = Array.isArray(data?.Messages) ? data.Messages : Object.values(data?.Messages || {});
       for (const m of msgs) if (m && /PENALTY|DISQUALIF/.test(m.Message || '')) this.#add(t, state, { kind: 'pen', cls: 'pen', text: esc(m.Message.replace(/^FIA STEWARDS:\s*/, '')) });
-    }
+      for (const m of msgs) if (m && /WILL (RESUME|RESTART|START) AT|WILL NOT RESUME/i.test(m.Message || '')) this.#add(t, state, { kind: 'flag', cls: 'resume', text: esc(m.Message) + ' (track time)' });    }
 
     if (topic === 'PitLaneTimeCollection') {
       for (const [num, p] of Object.entries(data?.PitTimes || {})) {

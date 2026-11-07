@@ -1,5 +1,5 @@
 // Top bar: event, track status, lap / clock, weather, delay control, connection.
-import { esc, trackState, sessionKind, parseClock, fmtClock, driverOrder } from '../format.js';
+import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder } from '../format.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -73,12 +73,21 @@ export class Header {
     if ($('track-label').textContent !== ts.label) $('track-label').textContent = ts.label;
 
     const kind = sessionKind(s);
-    // Before the session starts F1 sends the full session length as a frozen
-    // clock ("18:00"). Show a countdown to the start time instead.
-    this.startUtc = sessionStartUtc(s.SessionInfo);
-    this.preStart = s.SessionStatus?.Status === 'Inactive' && !!this.startUtc;
-    if (this.preStart) {
-      $('lc-label').textContent = 'Starts in';
+    const phase = sessionPhase(s);
+    const restart = restartInfo(s);
+    // Before the start (or while waiting to restart after a red flag) F1 sends
+    // a frozen clock. Count down to the announced (re)start time instead.
+    this.countTo = null;
+    if (phase === 'pre') {
+      this.countTo = restart?.kind === 'start' ? restart.utc : sessionStartUtc(s.SessionInfo);
+      this.countLabel = ['Starts in', 'Starting'];
+    } else if ((phase === 'paused' || phase === 'suspended') && restart?.kind === 'resume') {
+      this.countTo = restart.utc;
+      this.countLabel = ['Resumes in', 'Resuming'];
+    }
+    this.frozen = phase === 'suspended' || phase === 'paused';
+    if (this.countTo) {
+      $('lc-label').textContent = this.countLabel[0];
       this.clockMode = true;
       $('lc-bar').style.width = '0%';
     } else if (kind === 'race' && s.LapCount) {
@@ -93,7 +102,8 @@ export class Header {
       $('lc-bar').style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`;
       this.clockMode = false;
     } else {
-      $('lc-label').textContent = kind === 'quali' ? `Q${Number(s.TimingData?.SessionPart) || 1} · left` : 'Time left';
+      const part = kind === 'quali' ? `Q${Number(s.TimingData?.SessionPart) || 1} · ` : '';
+      $('lc-label').textContent = this.frozen ? `${part}stopped` : kind === 'quali' ? `${part}left` : 'Time left';
       this.clockMode = true;
       this.sessionLen = { practice: 3600, quali: [1080, 900, 720][(Number(s.TimingData?.SessionPart) || 1) - 1] }[kind] || 3600;
     }
@@ -177,12 +187,13 @@ export class Header {
 
   frame(now) {
     if (!this.clockMode) return;
-    if (this.preStart) {
-      const left = (this.startUtc - now) / 1000;
+    if (this.countTo) {
+      const left = (this.countTo - now) / 1000;
       const txt = left > 0 ? fmtClock(left) : 'Soon';
       const el = $('lc-value');
       if (el.textContent !== txt) el.textContent = txt;
-      $('lc-label').textContent = left > 0 ? 'Starts in' : 'Starting';
+      const label = this.countLabel[left > 0 ? 0 : 1];
+      if ($('lc-label').textContent !== label) $('lc-label').textContent = label;
       return;
     }
     const c = this.store.state.ExtrapolatedClock;
