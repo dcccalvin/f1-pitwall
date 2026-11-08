@@ -20,7 +20,11 @@ It connects to F1's live timing feed from your own computer and shows it as a we
 - **Weather radar**: the last two hours of rain around the circuit, with distance rings and wind
 - **Red flags**: the announced restart time with a countdown, plus rain / wet-track / low-grip notices from race control
 - **Team radio transcripts**: every clip is turned into text on your laptop (Whisper speech model, free, nothing leaves the laptop). The text shows under each clip, and while a clip plays a pop-up shows the driver who is talking with the words lighting up as they are said. It can mishear noisy radio. The first time, it downloads the speech model (about 250 MB); while it works it uses about 1 GB of memory, freed after 20 quiet minutes.
-- **Stays up**: if the internet drops, a bar says so and Pit Wall reconnects by itself within seconds of it coming back
+- **Stewards**: an INV badge on drivers under investigation (or to be investigated after the race), with what for, in the tower and the Driver panel
+- **Results** after the chequered flag: podium, places gained from the grid, fastest lap, unserved time penalties added, and the stewards' cases still open
+- **Weather from lap times**: a warning when slicks suddenly lose time (rain or lost grip) or inters get quicker (drying track), and which tyre is faster once cars run both
+- **Race control** folds runs of blue flags into one line (or hides them)
+- **Stays up**: if the internet drops, a bar says so and Pit Wall reconnects by itself within seconds of it coming back; a connection attempt that hangs is dropped after 20 s and retried
 
 **With an F1 TV subscription (Access plan is enough), switched on later**
 

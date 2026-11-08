@@ -2,6 +2,7 @@
 // Columns are user-selectable and auto-hide by priority when the panel is narrow.
 import { esc, teamColor, sessionKind, segClass, driverOrder, currentStint, compoundLetter, parseLap } from '../format.js';
 import { penalties, penaltyBadge } from '../penalties.js';
+import { investigations, openByCar, STATUS_LABEL } from '../investigations.js';
 import { avatar } from '../media.js';
 
 // prio: higher = kept longer when space runs out. min = px needed.
@@ -114,7 +115,7 @@ export class Tower {
     e.innerHTML = `
       <div class="c-pos"><span class="posn"></span></div>
       <div class="c-delta"></div>
-      <div class="c-driver"><span class="d-av"></span><span class="d-tla"></span><span class="d-num"></span><span class="d-name"></span><span class="d-pen" hidden title="Penalty not served yet"></span><span class="d-badge" hidden></span></div>
+      <div class="c-driver"><span class="d-av"></span><span class="d-tla"></span><span class="d-num"></span><span class="d-name"></span><span class="d-pen" hidden title="Penalty not served yet"></span><span class="d-inv" hidden>INV</span><span class="d-badge" hidden></span></div>
       <div class="c-tyre"><span class="tyre"></span><span class="tyre-age"></span></div>
       <div class="c-num c-gap r"></div>
       <div class="c-num c-int r"></div>
@@ -129,7 +130,7 @@ export class Tower {
     const q = (s) => e.querySelector(s);
     r = {
       el: e, cache: {},
-      pos: q('.posn'), delta: q('.c-delta'), num: q('.d-num'), tla: q('.d-tla'), name: q('.d-name'), badge: q('.d-badge'), pen: q('.d-pen'), av: q('.d-av'),
+      pos: q('.posn'), delta: q('.c-delta'), num: q('.d-num'), tla: q('.d-tla'), name: q('.d-name'), badge: q('.d-badge'), pen: q('.d-pen'), inv: q('.d-inv'), av: q('.d-av'),
       tyre: q('.tyre'), age: q('.tyre-age'), gap: q('.c-gap'), int: q('.c-int'), last: q('.c-last'), best: q('.c-best'),
       sectors: [...e.querySelectorAll('.c-sec')].map((s) => ({ segs: s.querySelector('.segs'), v: s.querySelector('.sec-v') })),
       speed: q('.c-speed'), pits: q('.c-pits'),
@@ -167,7 +168,7 @@ export class Tower {
     this.empty.hidden = !hub;
     if (hub) this.store.renderEmpty?.(this.empty);
     const back = document.getElementById('nextup-btn');
-    if (back) back.hidden = hub || !this.store.hubIdle?.();
+    if (back) { back.hidden = hub || !this.store.hubIdle?.(); back.textContent = this.store.hubResults?.() ? 'Results' : 'Up next'; }
 
     // qualifying knockout zone
     const part = Number(s.TimingData?.SessionPart) || 1;
@@ -176,6 +177,8 @@ export class Tower {
     const advance = kind === 'quali' && part < 3 ? (Number(entries?.[part]) || (part === 1 ? (total >= 22 ? 16 : 15) : 10)) : null;
 
     const pens = kind === 'race' ? penalties(s, this.store.history) : {};
+    // Stewards' cases still open (under investigation now, or after the session).
+    const inv = openByCar(investigations(s));
     const seen = new Set();
     order.forEach((num, i) => {
       seen.add(num);
@@ -221,6 +224,9 @@ export class Tower {
       if (r.cache.avKey !== (d.PublicIdRight || d.HeadshotUrl)) { r.cache.avKey = d.PublicIdRight || d.HeadshotUrl; r.av.innerHTML = avatar(d, 'av'); }
       const pb = penaltyBadge(pens[num]);
       if (r.cache.pen !== pb) { r.cache.pen = pb; r.pen.hidden = !pb; r.pen.textContent = pb; }
+      const cases = (inv[num] || []).filter((x) => x.status !== 'noted');
+      const invTip = cases.map((x) => `${STATUS_LABEL[x.status]}: ${x.reason || 'incident'}${x.where ? ` (${x.where.toLowerCase()})` : ''}`).join('\n');
+      if (r.cache.inv !== invTip) { r.cache.inv = invTip; r.inv.hidden = !cases.length; r.inv.title = invTip; r.inv.classList.toggle('after', cases.length > 0 && cases.every((x) => x.status === 'after')); }
 
       let badge = '', bcls = 'd-badge';
       if (l.Retired) { badge = kind === 'race' ? 'DNF' : 'OUT'; bcls += ' out'; }

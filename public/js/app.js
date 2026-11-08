@@ -111,6 +111,7 @@ const store = {
   renderEmpty(el) { nextUp.render(el); },
   hubWanted() { return nextUp.wanted(); },
   hubIdle() { return nextUp.idle(); },
+  hubResults() { return nextUp.results(); },
   showTiming: null, // session key whose (finished) timing the user chose to look at
   openLayoutPop() { openLayoutPop(document.getElementById('layout-btn')); },
   onLayout() { dirty.add('*'); },
@@ -133,6 +134,7 @@ const strategy = new Strategy(store);
 const telemetry = new Telemetry(store);
 const battles = new Battles(store);
 const moments = new Moments(store);
+store.moment = (text, cls) => moments.note(store.playNow(), store.state, text, cls);
 const radar = new Radar(store);
 const sheet = new DriverSheet(store);
 const history = new LapHistory();
@@ -264,6 +266,8 @@ function onState(m) {
 function onMsgs(msgs) {
   for (const [t, topic, data] of msgs) {
     applyMessage(store.state, topic, data);
+    // Race control also says "RACE START" at lights out: a second trigger for the start lights.
+    if (topic === 'RaceControlMessages' && (Array.isArray(data?.Messages) ? data.Messages : Object.values(data?.Messages || {})).some((m) => /^(RACE|SPRINT) START/i.test(m?.Message || ''))) store.lightsOut?.();
     if (topic === 'ExtrapolatedClock') store.clockSeen = { utc: store.state.ExtrapolatedClock?.Utc, t };
     estimated.onMessage(t, topic, data, store.state);
     gps.onMessage(t, topic, data);

@@ -1,8 +1,9 @@
 // Driver focus: everything about one driver in one place. Click a driver anywhere
 // (timing tower, map, battles, radio, moments, race control) to follow them here.
 import { esc, teamColor, sessionKind, segClass, driverOrder, currentStint, stintList, compoundLetter, parseLap, fmtLap, sessionLocalTime, trackState } from '../format.js';
-import { gapSeconds } from '../history.js';
+import { rejoinEstimate, raceGaps } from '../racegaps.js';
 import { penalties, penaltyBadge } from '../penalties.js';
+import { investigations, STATUS_LABEL } from '../investigations.js';
 import { avatar, teamLogo, carImage, img } from '../media.js';
 
 const COMP_COLOR = { SOFT: 'var(--tyre-soft)', MEDIUM: 'var(--tyre-medium)', HARD: 'var(--tyre-hard)', INTERMEDIATE: 'var(--tyre-inter)', WET: 'var(--tyre-wet)' };
@@ -92,6 +93,7 @@ export class DriverPanel {
       clips: clips.map((c) => [c.Path, c.Utc]),
       context: this.#context(s, kind, num, l, part, order, bestLap, kind === 'race' ? pens : {}),
       penalty: penaltyBadge(pens[num]),
+      cases: investigations(s).filter((x) => x.cars.some((c) => c.num === String(num))).map((x) => [x.status, x.reason, x.where, x.decision, x.cars.map((c) => c.tla).join(' & ')]),
       penaltyItems: (pens[num]?.items || []).map((x) => [x.kind, x.secs, x.served || '']),
       pid: d.PublicIdRight || d.HeadshotUrl || '', theme: document.body.dataset.theme,
       follow: !!this.store.map?.follow, alerts: !!this.store.alerts,
@@ -124,33 +126,27 @@ export class DriverPanel {
       if (!pl || l.InPit || l.Retired) return null;
       const ts = trackState(s).key;
       const loss = Number(ts === 'sc' ? pl.sc : ts.startsWith('vsc') ? pl.vsc : pl.normal);
-      const myGap = gapSeconds(l.GapToLeader);
-      if (myGap == null || !isFinite(loss)) return null;
       // An unserved time penalty is served stationary at the next stop: it adds to the loss.
       const owed = pens[num]?.pending || 0;
-      const target = myGap + loss + owed;
-      let pos = 1, front = null, back = null;
-      for (const n of order) {
-        if (n === num) continue;
-        const o = lines[n];
-        if (!o || o.Retired || o.InPit) continue;
-        const g = gapSeconds(o.GapToLeader);
-        if (g == null) continue;
-        if (g < target) { pos++; if (!front || g > front.g) front = { n, g }; } else if (!back || g < back.g) back = { n, g };
-      }
+      const est = rejoinEstimate(s, num, loss, owed);
+      if (!est) return null;
+      const { pos, front, back, target } = est;
       const parts = [`Pit now → rejoin around P${pos}`];
       if (front) parts.push(`${(target - front.g).toFixed(1)} s behind ${dl[front.n]?.Tla || front.n}`);
       if (back) parts.push(`${(back.g - target).toFixed(1)} s ahead of ${dl[back.n]?.Tla || back.n}`);
+      // Several cars just stopped (rain, slicks...): the others ahead may well follow.
+      if (est.wave && est.wave.pos !== pos) parts.push(`${est.wave.cars} cars just pitted: if the rest come in too, P${est.wave.pos}`);
       // Where they'd finish if the race ended now, with everyone's unserved time penalties added.
       let finish = '';
       if (Object.values(pens).some((p) => p.pending)) {
-        const eff = myGap + owed;
+        const gaps = raceGaps(s);
+        const eff = gaps[num] + owed;
         let p2 = 1;
         for (const n of order) {
           if (n === num) continue;
           const o = lines[n];
           if (!o || o.Retired) continue;
-          const g = gapSeconds(o.GapToLeader);
+          const g = gaps[n];
           if (g != null && g + (pens[n]?.pending || 0) < eff) p2++;
         }
         finish = ` · if it ended now with penalties applied: P${p2}`;
@@ -193,6 +189,12 @@ export class DriverPanel {
         ${cell('Speed trap', m.trapBest ? `${esc(m.trapBest)} km/h` : '–', '', m.trapRank ? `P${esc(m.trapRank)} fastest · last ${esc(m.trap || '–')}` : '')}
         ${kind === 'race' ? cell('Since start', m.gained == null ? '–' : m.gained > 0 ? `▲ ${m.gained}` : m.gained < 0 ? `▼ ${-m.gained}` : 'No change', m.gained > 0 ? 'up' : m.gained < 0 ? 'down' : '') : ''}
         ${cell('Track limits', m.strikes ? `${m.strikes} strike${m.strikes > 1 ? 's' : ''}` : 'Clean', m.strikes >= 3 ? 'bad' : '', m.bw ? 'Black-and-white flag shown' : m.strikes ? 'Lap times deleted' : '')}
+        ${m.cases.length ? (() => {
+          const open = m.cases.filter(([st]) => st === 'investigating' || st === 'after' || st === 'noted');
+          const head = open.length ? `${open.length} open` : 'All settled';
+          const lines = m.cases.map(([st, reason, where, decision, who]) => `${STATUS_LABEL[st]}${decision && decision !== STATUS_LABEL[st] ? ` (${decision})` : ''}: ${reason || 'incident'}${where ? `, ${where.toLowerCase()}` : ''}${who.includes('&') ? ` · ${who}` : ''}`);
+          return cell('Stewards', esc(head), open.some(([st]) => st !== 'noted') ? 'warn' : '', esc(lines.join(' · ')));
+        })() : ''}
         ${m.penaltyItems.length ? cell('Penalties', m.penalty ? `${esc(m.penalty)} owed` : 'All served', m.penalty ? 'bad' : '', m.penaltyItems.map(([k, sec, served]) => `${k === 'time' ? `${sec} s time` : k === 'dt' ? 'Drive-through' : `${sec} s stop/go`}${served === 'withdrawn' ? ' (withdrawn)' : served ? ' (served)' : ''}`).join(' · ')) : ''}
       </div>
       <div class="dv-sec"><div class="dv-h">Sectors</div><div class="dv-sectors">

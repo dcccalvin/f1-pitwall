@@ -39,7 +39,15 @@ export function normalise(topic, data) {
  * fresh connection if F1 goes silent while data should be flowing.
  */
 const NETWORK_ERR = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|getaddrinfo|socket hang up|network|WebSocket failed/i;
+// How long without any message before the link counts as dead. While a session is
+// running F1 sends timing several times a second, so 20 s of nothing is already a
+// dead link; between sessions only a heartbeat every ~15 s arrives.
 const SILENCE_MS = 45000;
+const SILENCE_BUSY_MS = 20000;
+// A reconnect attempt that hasn't finished in this time is abandoned and retried.
+// (Without it, a half-dead network can leave one attempt hanging for 5 minutes:
+// that blacked out ~22 minutes of the 2026 São Paulo GP.)
+const CONNECT_TIMEOUT_MS = 20000;
 
 export class F1Feed extends EventEmitter {
   constructor({ token = null, log = console, hubUrl = process.env.F1_HUB_URL || HUB_URL } = {}) {
@@ -101,18 +109,20 @@ export class F1Feed extends EventEmitter {
 
   #watchdog() {
     if (this.stopped || this.state !== 'live' || !this.conn) return;
-    // F1 sends a heartbeat every ~15 s while a session is on; silence means a dead link.
-    if (this.heartbeats && Date.now() - this.lastDataAt > SILENCE_MS) {
+    // F1 sends a heartbeat every ~15 s; while timing is flowing, much more. Silence = dead link.
+    const busy = this.lastTimingAt && this.lastTimingAt >= this.lastDataAt - 5000 && Date.now() - this.lastTimingAt < 120000;
+    const limit = busy ? SILENCE_BUSY_MS : SILENCE_MS;
+    if ((this.heartbeats || busy) && Date.now() - this.lastDataAt > limit) {
       const c = this.conn;
       this.conn = null;
       c.stop().catch(() => {});
-      this.#retry(`No data from F1 for ${Math.round(SILENCE_MS / 1000)} s`);
+      this.#retry(`No data from F1 for ${Math.round(limit / 1000)} s`);
     }
   }
 
   async #connect() {
     if (this.stopped) return;
-    const opts = { transport: signalR.HttpTransportType.WebSockets };
+    const opts = { transport: signalR.HttpTransportType.WebSockets, timeout: 15000 };
     if (this.token) opts.accessTokenFactory = () => this.token;
     const conn = new signalR.HubConnectionBuilder()
       .withUrl(this.hubUrl, opts)
@@ -127,6 +137,7 @@ export class F1Feed extends EventEmitter {
       if (this.conn !== conn) return;
       this.lastDataAt = Date.now();
       if (topic === 'Heartbeat') this.heartbeats = true;
+      if (topic === 'TimingData') this.lastTimingAt = this.lastDataAt;
       try {
         const [t, d] = normalise(topic, data);
         // A new session (e.g. practice -> qualifying) on the same connection:
@@ -151,15 +162,21 @@ export class F1Feed extends EventEmitter {
     });
 
     this.#status(this.downSince ? 'reconnecting' : 'connecting', this.downSince ? 'Reconnecting to F1' : '');
+    let timer;
+    const giveUp = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`F1 did not answer within ${CONNECT_TIMEOUT_MS / 1000} s`)), CONNECT_TIMEOUT_MS); });
     try {
-      await conn.start();
-      if (this.conn !== conn) return;
-      await this.#subscribe(conn);
+      await Promise.race([(async () => {
+        await conn.start();
+        if (this.conn !== conn) return;
+        await this.#subscribe(conn);
+      })(), giveUp]);
     } catch (e) {
       if (this.conn !== conn) return;
       this.conn = null;
       conn.stop().catch(() => {});
       this.#retry(e?.message || String(e));
+    } finally {
+      clearTimeout(timer);
     }
   }
 

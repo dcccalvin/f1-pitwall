@@ -1,5 +1,6 @@
 // Top bar: event, track status, lap / clock, weather, delay control, connection.
 import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder, sessionStartUtc, startProcedure, sessionOver } from '../format.js';
+import { crossover, paceShift } from '../crossover.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -186,8 +187,10 @@ export class Header {
     if (lowGrip && !declared) parts.push('Low grip');
     if (wetTyres) parts.push(`${wetTyres} on wets`);
     if (!parts.length && risk) parts.push(`Rain risk ${risk}%`);
+    const cond = this.#conditions(s, fresh);
+    if (cond.chip) parts.push(cond.chip);
     const label = parts.join(' · ');
-    const cls = raining || declared || lowGrip || wetTyres ? 'rain' : 'risk';
+    const cls = raining || declared || lowGrip || wetTyres || cond.chip ? 'rain' : 'risk';
     const chip = $('wet-chip');
     chip.hidden = !label;
     chip.className = `wet-chip ${cls}`;
@@ -198,12 +201,56 @@ export class Header {
       overtakeOff && 'Race control: overtake mode disabled',
       wetTyres && `${wetTyres} cars on intermediate or wet tyres`,
       risk && `Race control: ${risk}% risk of rain`,
+      cond.detail,
     ].filter(Boolean).join('\n');
     if ($('wet-label').textContent !== label) $('wet-label').textContent = label;
 
     // Tell the user once when rain starts (not on first load).
     if (!fresh && this.wasRaining === false && raining) this.store.toast('Rain is falling at the track', 'rain');
     this.wasRaining = raining;
+  }
+
+  /**
+   * Lap times as a weather signal (races): slicks suddenly slower = rain or lost grip,
+   * inters suddenly quicker = drying track, and which tyre is faster once cars run both.
+   * Checked every 10 s; each kind of alert at most once every 5 minutes.
+   * (In the 2026 São Paulo GP, slicks were 1.3–1.8 s a lap slower 2–4 minutes before
+   * the field pitted for inters.)
+   */
+  #conditions(s, fresh) {
+    if (sessionKind(s) !== 'race' || sessionPhase(s) !== 'running' || !this.store.history) return {};
+    if (this.cond && Date.now() - (this.condAt || 0) < 10000) return this.cond;
+    this.condAt = Date.now();
+    const until = this.store.playNow();
+    const green = String(s.TrackStatus?.Status ?? '1') === '1';
+    const shift = green ? paceShift(this.store.history, until) : {};
+    const cross = crossover(this.store.history, until);
+    let chip = '', alert = null;
+    const detail = [];
+    if (cross) {
+      chip = `${cross.faster === 'slicks' ? 'Slicks' : 'Inters'} faster ${cross.by.toFixed(1)}s`;
+      detail.push(`Last clean laps: slicks ${cross.dry.time.toFixed(1)} s (${cross.dry.cars} cars), inters ${cross.wet.time.toFixed(1)} s (${cross.wet.cars} cars)`);
+      if (this.crossFaster && this.crossFaster !== cross.faster) alert = { key: 'cross', text: `Crossover: ${cross.faster} are now ${cross.by.toFixed(1)} s a lap faster` };
+      this.crossFaster = cross.faster;
+    }
+    if (shift.dry?.change >= 1.25 && shift.dry.cars >= 6) {
+      chip ||= `Slicks +${shift.dry.change.toFixed(1)}s`;
+      detail.push(`Slicks are ${shift.dry.change.toFixed(1)} s slower than a lap earlier (${shift.dry.cars} cars): rain or less grip`);
+      alert ||= { key: 'slicks', text: `Slicks losing ${shift.dry.change.toFixed(1)} s a lap (${shift.dry.cars} cars): rain or less grip, watch for stops for inters` };
+    }
+    if (shift.wet?.change <= -1.5 && shift.wet.cars >= 6) {
+      chip ||= `Inters ${shift.wet.change.toFixed(1)}s`;
+      detail.push(`Inters are ${Math.abs(shift.wet.change).toFixed(1)} s quicker than a lap earlier (${shift.wet.cars} cars): the track is drying`);
+      alert ||= { key: 'drying', text: `Track drying: inters ${Math.abs(shift.wet.change).toFixed(1)} s a lap quicker (${shift.wet.cars} cars), watch for the switch to slicks` };
+    }
+    this.alerted ||= {};
+    if (alert && !fresh && Date.now() - (this.alerted[alert.key] || 0) > 5 * 60000) {
+      this.alerted[alert.key] = Date.now();
+      this.store.toast(alert.text, 'rain');
+      this.store.moment?.(alert.text, 'rain');
+    }
+    this.cond = { chip, detail: detail.join('\n') };
+    return this.cond;
   }
 
   frame() {
