@@ -979,3 +979,81 @@ body.replaying .delay-btn { display: none; }
 .dv-who b .d-pen { font-size: 11px; margin-left: 6px; vertical-align: 3px; }
 .rp-item .btn, .rp-now .btn { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .rp-item .btn svg { width: 13px; height: 13px; }
+
+/* ================================================================ up next (between sessions) */
+.empty.hub { inset: 0; display: block; text-align: left; padding: 0; overflow-y: auto; z-index: 4; }
+.nu { padding: 22px 24px 28px; max-width: 980px; }
+.nu h3 { margin: 0 0 6px; }
+.nu-k { color: var(--text-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.nu-top { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: stretch; padding-bottom: 18px; border-bottom: var(--rule) solid var(--line); }
+.nu-when { flex: 1 1 260px; }
+.nu-title { font-size: 17px; margin-top: 4px; color: var(--text-2); }
+.nu-title b { color: var(--text); }
+.nu-cd { font-size: 46px; font-weight: 750; letter-spacing: -.03em; line-height: 1.05; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+.nu-sub { color: var(--text-2); font-size: 13px; }
+.nu-wx { flex: 1 1 250px; max-width: 380px; padding: 12px 14px; border: var(--rule) solid var(--line-2); border-radius: var(--radius); }
+.nu-wx-main { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.nu-wx-main svg { width: 16px; height: 16px; color: var(--flag-blue); align-self: center; }
+.nu-wx-main b { font-size: 26px; font-weight: 700; }
+.nu-wx-main span { color: var(--text); font-weight: 600; }
+.nu-wx-sub { color: var(--text-2); font-size: 12.5px; margin-top: 4px; }
+.nu-verdict { margin-top: 8px; font-weight: 700; font-size: 13px; }
+.nu-wx.wet { border-color: var(--flag-blue); }
+.nu-wx.wet .nu-verdict { color: var(--flag-blue); }
+.nu-wx.risk .nu-verdict { color: var(--flag-yellow); }
+.nu-wx.dry .nu-verdict { color: var(--text-2); }
+.nu-sec { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 20px 0 12px; }
+.nu-sec h4, .nu-why h4 { margin: 0; font-size: 15px; font-weight: 700; }
+.nu-src { font-size: 12px; }
+/* Two staggered columns, like the real grid: P1 on the left, P2 a little further back on the right. */
+.nu-gridwrap { position: relative; padding-top: 10px; }
+.nu-line { position: absolute; left: 0; right: 0; top: 0; height: 6px; background: repeating-conic-gradient(var(--text) 0 25%, transparent 0 50%) 0 0 / 6px 6px; opacity: .55; }
+.nu-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 8px; padding: 8px 0 30px; }
+.nu-slot { --h: 46px; height: var(--h); display: flex; align-items: center; gap: 10px; padding: 0 10px 0 0; border: var(--rule) solid var(--line-2); border-left: 4px solid var(--tc); border-radius: var(--radius); background: var(--panel-2); cursor: pointer; min-width: 0; }
+.nu-slot.gr { transform: translateY(calc(var(--h) / 2 + 4px)); }
+.nu-slot:hover { border-color: var(--line-3); border-left-color: var(--tc); }
+.nu-slot.mine { box-shadow: 0 0 0 1.5px var(--text); }
+.nu-pos { width: 30px; text-align: center; font-size: 17px; font-weight: 750; font-variant-numeric: tabular-nums; flex: none; }
+.nu-slot .av { width: 30px; height: 30px; }
+.nu-who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.15; }
+.nu-who b { font-size: 14.5px; }
+.nu-who small { color: var(--text-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nu-chg { font-size: 12px; font-weight: 700; color: var(--text-3); font-variant-numeric: tabular-nums; flex: none; min-width: 26px; text-align: right; }
+.nu-chg.up { color: var(--green); }
+.nu-chg.down { color: var(--flag-red); }
+.nu-slot.pen .nu-chg.down { padding: 1px 5px; border-radius: 3px; background: color-mix(in srgb, var(--flag-red) 18%, transparent); }
+.nu-why { margin-top: 6px; padding-top: 14px; border-top: var(--rule) solid var(--line); }
+.nu-wrow { display: grid; grid-template-columns: 22px 44px 92px 1fr; align-items: center; gap: 10px; padding: 7px 0; border-bottom: var(--rule) solid var(--line); cursor: pointer; }
+.nu-wrow:first-of-type { margin-top: 10px; }
+.nu-from { color: var(--text-2); font-variant-numeric: tabular-nums; font-size: 13px; }
+.nu-wrow em { font-style: normal; color: var(--text); font-size: 13px; }
+.nu-note { color: var(--text-2); font-size: 12.5px; margin: 10px 0 0; max-width: 760px; }
+.nu-last { margin: 22px 0 12px; color: var(--text-2); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.nu .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .nu { padding: 16px 12px 24px; }
+  .nu-cd { font-size: 38px; }
+  .nu-grid { column-gap: 8px; }
+  .nu-slot { --h: 42px; gap: 6px; }
+  .nu-slot .av { width: 24px; height: 24px; }
+  .nu-who small { display: none; }
+  .nu-wrow { grid-template-columns: 22px 40px 84px 1fr; gap: 6px; }
+}
+
+/* map: cars fade in/out at the pits; follow mode dims the others */
+.car-dot { transition: opacity .45s var(--ease); }
+.car-dot.gone { opacity: 0; pointer-events: none; }
+.car-dot.faded { opacity: .38; }
+.car-dot.faded.leader { opacity: .55; }
+.mini-btn.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/* connection warning bar: slides down under the header while something is wrong */
+.netbar { position: fixed; z-index: 45; left: 0; right: 0; top: calc(var(--topbar-h) + env(safe-area-inset-top)); display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; font-weight: 600; color: #1a1200; background: var(--flag-yellow); animation: netbar-in .35s var(--ease); }
+.netbar.bad { background: var(--flag-red); color: #fff; }
+.netbar i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; animation: beacon 1.1s var(--ease-in-out) infinite; }
+.netbar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes netbar-in { from { transform: translateY(-100%); opacity: 0; } }
+.toast.ok { background: var(--flag-green); color: #04150a; border-color: var(--flag-green); font-weight: 650; }
+@media (max-width: 900px) { .netbar span { white-space: normal; } }
+.empty.hub p { margin: 10px 0 0; max-width: 760px; text-align: left; }
+.empty.hub .actions { justify-content: flex-start; margin-top: 8px; }
