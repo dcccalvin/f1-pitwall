@@ -126,3 +126,4 @@ Copy `config.example.json` to `config.json` to change defaults:
 - This uses F1's unofficial live timing feed. F1 changes it without notice (car data moved behind F1 TV in 2025, and the archive of past sessions was locked in October 2026), so things may occasionally need fixing.
 - For personal use on your own machine only. Don't host it publicly.
 - Unofficial and not associated with Formula 1. Circuit outlines come from MultiViewer's public API. Schedule from the Jolpica API. Fonts are under the SIL Open Font License (see `public/fonts/LICENSES.txt`).
+- Want to change how it works? The [developer guide](docs/DEVELOPER.md) explains every part of the code and how to change it.
