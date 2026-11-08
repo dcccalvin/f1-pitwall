@@ -1057,3 +1057,33 @@ body.replaying .delay-btn { display: none; }
 @media (max-width: 900px) { .netbar span { white-space: normal; } }
 .empty.hub p { margin: 10px 0 0; max-width: 760px; text-align: left; }
 .empty.hub .actions { justify-content: flex-start; margin-top: 8px; }
+
+/* ================================================================ team radio pop-up: who's talking */
+.radiocard { position: fixed; z-index: 58; left: 14px; bottom: calc(14px + var(--rb-h, 0px)); width: min(380px, calc(100vw - 28px));
+  display: flex; align-items: center; gap: 14px; padding: 12px 12px 12px 14px; background: var(--panel); border: var(--rule) solid var(--line-2);
+  border-left: 4px solid var(--tc, var(--text)); border-radius: var(--radius); box-shadow: var(--shadow); cursor: pointer; }
+.radiocard.in { animation: rcard-in .38s var(--ease); }
+.radiocard.out { animation: rcard-out .32s ease-in forwards; }
+@keyframes rcard-in { from { opacity: 0; transform: translateY(24px); } }
+@keyframes rcard-out { to { opacity: 0; transform: translateY(16px); } }
+.rcard-photo .av { width: 64px; height: 64px; box-shadow: 0 0 0 2.5px var(--tc); }
+.rcard-main { flex: 1; min-width: 0; }
+.rcard-k { display: flex; align-items: center; gap: 7px; color: var(--text-3); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+.rcard-k .clip-tag { text-transform: none; letter-spacing: 0; }
+.rcard-level { display: inline-flex; align-items: center; gap: 2px; height: 14px; }
+.rcard-level i { width: 3px; height: 14px; border-radius: 2px; background: var(--tc, var(--text)); transform: scaleY(.12); transform-origin: center; }
+.rcard-name { display: flex; align-items: baseline; gap: 8px; margin-top: 3px; min-width: 0; }
+.rcard-name b { font-size: 20px; font-weight: 750; letter-spacing: -.01em; }
+.rcard-name span { color: var(--text-2); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rcard-team { display: flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 12.5px; margin-top: 2px; }
+.rcard-logo { height: 14px; width: auto; max-width: 70px; object-fit: contain; }
+.rcard-bar { height: 3px; margin-top: 8px; background: var(--line-2); border-radius: 2px; overflow: hidden; }
+.rcard-bar i { display: block; height: 100%; width: 0; background: var(--tc, var(--text)); }
+.rcard-stop { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: var(--text-2); border: var(--rule) solid var(--line-2); flex: none; align-self: flex-start; }
+.rcard-stop:hover { color: var(--text); border-color: var(--line-3); }
+.rcard-stop svg { width: 14px; height: 14px; }
+@media (max-width: 900px) {
+  .radiocard { left: 10px; right: 10px; width: auto; bottom: calc(70px + env(safe-area-inset-bottom) + var(--rb-h, 0px)); }
+  .rcard-photo .av { width: 52px; height: 52px; }
+}
+@media (prefers-reduced-motion: reduce) { .radiocard.in, .radiocard.out { animation-duration: .01s; } }
