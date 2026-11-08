@@ -863,40 +863,101 @@ body[data-track="red"] .status-pill .flagicon { animation: beacon 1.1s var(--eas
 .pc-chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .pc-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); font-size: 12.5px; }
 
-/* ================================================================ waving flag */
-.flagshow { position: fixed; z-index: 70; left: 50%; top: calc(var(--topbar-h) + 18px); transform: translateX(-50%); pointer-events: none; }
-.flagshow.in { animation: fs-in .6s var(--ease); }
-.flagshow.out { animation: fs-out .45s ease-in forwards; }
-@keyframes fs-in { from { opacity: 0; transform: translate(-50%, -40px) scale(.92); } }
-@keyframes fs-out { to { opacity: 0; transform: translate(-50%, -24px) scale(.97); } }
-.fs-card { display: flex; align-items: center; gap: 22px; padding: 18px 28px 18px 22px; background: var(--panel); border: var(--rule) solid var(--line-2); border-radius: 6px; box-shadow: var(--shadow); }
-.fs-flag { position: relative; width: 132px; height: 84px; flex: none; }
-.fs-pole { position: absolute; left: 0; top: -8px; bottom: -18px; width: 4px; border-radius: 2px; background: linear-gradient(90deg, #8d8d8d, #e6e6e6 45%, #9a9a9a); }
-.fs-pole::before { content: ""; position: absolute; left: -2px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #d8d8d8; }
-.fs-cloth { position: absolute; left: 4px; right: 0; top: 0; height: 76px; display: flex; }
-.fs-cloth i { flex: 1; height: 100%; --a: calc(var(--i) * .42px); background: var(--cloth); background-size: 128px 76px; background-position: calc(var(--i) * -5.82px) 0;
-  animation: fs-wave 1.05s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -.075s); }
-@keyframes fs-wave { from { transform: translateY(calc(var(--a) * -1)) scaleY(.985); filter: brightness(1.14); } to { transform: translateY(var(--a)) scaleY(1); filter: brightness(.78); } }
-.fs-green { --cloth: #1fb35a; }
-.fs-yellow { --cloth: #f2c200; }
-.fs-red { --cloth: #e3202f; }
-.fs-chequered { --cloth: repeating-conic-gradient(#121212 0 25%, #f4f4f4 0 50%) 0 0 / 25.6px 25.4px; }
-.fs-chequered .fs-cloth i { background: repeating-conic-gradient(#121212 0 25%, #f4f4f4 0 50%); background-size: 25.6px 25.4px; background-position: calc(var(--i) * -5.82px) 0; }
-.fs-board { position: absolute; left: 4px; right: 0; top: 0; height: 76px; display: grid; place-items: center; font-style: normal; font-size: 30px; font-weight: 900; letter-spacing: .04em; color: #111; animation: fs-board 1.05s ease-in-out infinite alternate; }
-@keyframes fs-board { from { transform: translateY(-2px) skewY(-2deg); } to { transform: translateY(2px) skewY(1deg); } }
-.fs-text b { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
-.fs-text span { display: block; color: var(--text-2); font-size: 14px; margin-top: 3px; max-width: 320px; }
-.fs-sc .fs-text b, .fs-vsc .fs-text b { color: var(--flag-sc); }
-.fs-red .fs-text b { color: var(--flag-red); }
-.fs-green .fs-text b { color: var(--flag-green); }
+/* ================================================================ waving flag, screen glow, start lights */
+/* The flag floats on its own over the dashboard: no card, just the flag on its pole. */
+.flagshow { position: fixed; z-index: 70; inset: 0; pointer-events: none; display: grid; place-items: center; }
+.fs-wrap { transform: translateY(-4vh); }
+.flagshow.in .fs-wrap { animation: fs-in .5s var(--ease) both; }
+.flagshow.out .fs-wrap { animation: fs-out .45s ease-in forwards; }
+@keyframes fs-in { from { opacity: 0; transform: translateY(calc(-4vh + 60px)) scale(.9); } }
+@keyframes fs-out { to { opacity: 0; transform: translateY(calc(-4vh - 30px)) scale(.97); } }
+.fs-canvas { display: block; filter: drop-shadow(0 14px 24px rgba(0, 0, 0, .5)); }
+
+/* Screen edges light up in the flag colour, pulse twice, then fade. */
+.screenglow { position: fixed; inset: 0; z-index: 69; pointer-events: none; opacity: 0;
+  box-shadow: inset 0 0 0 3px var(--c, #fff), inset 0 0 70px color-mix(in srgb, var(--c, #fff) 38%, transparent); }
+.screenglow.on { animation: glow-pulse 2.2s ease-out; }
+@keyframes glow-pulse { 0% { opacity: 0; } 10% { opacity: 1; } 30% { opacity: .35; } 45% { opacity: .95; } 100% { opacity: 0; } }
+
+/* Start lights: five units, two red lamps each. */
+.lo-gantry { display: flex; gap: 10px; padding: 12px 14px; background: #0c0c0c; border: 1px solid #2a2a2a; border-radius: 10px; box-shadow: 0 16px 34px rgba(0, 0, 0, .55); }
+.lo-unit { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: #161616; border-radius: 8px; }
+.lo-unit i { width: 30px; height: 30px; border-radius: 50%; background: #2b0d0d; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .7); transition: background .08s, box-shadow .08s; }
+.lo-gantry.on1 .lo-unit:nth-child(1) i, .lo-gantry.on2 .lo-unit:nth-child(-n+2) i, .lo-gantry.on3 .lo-unit:nth-child(-n+3) i,
+.lo-gantry.on4 .lo-unit:nth-child(-n+4) i, .lo-gantry.on5 .lo-unit i { background: #ff2a2a; box-shadow: 0 0 16px 3px rgba(255, 42, 42, .75), inset 0 -3px 6px rgba(120, 0, 0, .5); }
+.lo-gantry.out .lo-unit i { background: #2b0d0d !important; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .7) !important; }
 @media (max-width: 900px) {
-  .fs-card { gap: 14px; padding: 12px 16px 12px 14px; }
-  .fs-flag { width: 92px; height: 60px; }
-  .fs-cloth, .fs-board { height: 54px; }
-  .fs-cloth i { background-size: 88px 54px; background-position: calc(var(--i) * -4px) 0; }
-  .fs-text b { font-size: 19px; }
-  .fs-text span { font-size: 12px; }
+  .lo-gantry { gap: 6px; padding: 8px 10px; }
+  .lo-unit { padding: 6px; gap: 6px; }
+  .lo-unit i { width: 20px; height: 20px; }
 }
+@media (prefers-reduced-motion: reduce) { .screenglow.on { animation-duration: .01s; } }
+
+/* ================================================================ replays */
+.replaybar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; height: var(--rb-h); display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; background: var(--panel); border-top: var(--rule) solid var(--line-2); font-size: 13px; }
+body.replaying { --rb-h: 52px; }
+body.replaying .layout { height: calc(100% - var(--topbar-h) - var(--rb-h)); }
+body.replaying .delay-btn { display: none; }
+.rb-play { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--text); color: var(--bg); flex: none; }
+.rb-play svg { width: 16px; height: 16px; }
+.rb-btn { height: 30px; padding: 0 10px; border: var(--rule) solid var(--line-2); border-radius: var(--radius); color: var(--text-2); font-weight: 600; white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.rb-btn svg { width: 15px; height: 15px; }
+.rb-btn:hover { color: var(--text); border-color: var(--line-3); }
+.rb-time { display: flex; flex-direction: column; line-height: 1.15; min-width: 74px; flex: none; }
+.rb-time b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.rb-time span { color: var(--text-3); font-size: 11px; }
+.rb-scrub { position: relative; flex: 1; min-width: 120px; height: 34px; }
+.rb-track { position: absolute; left: 0; right: 0; top: 19px; height: 4px; background: var(--line-2); border-radius: 2px; overflow: hidden; }
+.rb-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--text); }
+.rb-scrub input { position: absolute; left: 0; right: 0; top: 12px; width: 100%; height: 18px; margin: 0; opacity: 0; cursor: pointer; }
+.rb-knob { position: absolute; top: 15px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--text); pointer-events: none; }
+.rb-marks { position: absolute; left: 0; right: 0; top: 0; height: 14px; }
+.rb-mark { position: absolute; top: 0; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 1px; background: var(--text-3); cursor: pointer; }
+.rb-mark::before { content: ""; position: absolute; inset: -4px -6px; }
+.rb-mark:hover { transform: scaleY(1.25); }
+.m-start.rb-mark { background: var(--flag-green); }
+.m-red.rb-mark { background: var(--flag-red); }
+.m-sc.rb-mark, .m-vsc.rb-mark { background: var(--flag-sc); }
+.m-end.rb-mark { background: var(--text); }
+.rb-hover { position: absolute; bottom: 38px; transform: translateX(-50%); padding: 3px 7px; border-radius: 3px; background: var(--text); color: var(--bg); font-size: 11.5px; font-weight: 600; white-space: nowrap; pointer-events: none; }
+.rb-len { color: var(--text-3); font-variant-numeric: tabular-nums; flex: none; }
+.rb-speed { flex: none; }
+.rb-speed button { min-width: 34px; }
+.rb-title { color: var(--text-2); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+.rb-title b { color: var(--text); }
+.rb-exit { color: var(--text); }
+@media (max-width: 1240px) { .rb-title, .rb-skip { display: none; } }
+@media (max-width: 900px) {
+  body.replaying { --rb-h: 48px; }
+  .replaybar { bottom: calc(60px + env(safe-area-inset-bottom)); gap: 8px; padding: 0 10px; }
+  body.replaying .layout { height: calc(100% - var(--topbar-h) - env(safe-area-inset-top) - 60px - env(safe-area-inset-bottom) - var(--rb-h)); }
+  .rb-time span, .rb-len, .rb-btn span { display: none; }
+  .rb-time { min-width: 0; }
+  .rb-speed button:not(.on) { display: none; }
+  .rb-play { width: 32px; height: 32px; }
+}
+
+.replays .settings-body { padding-top: 4px; }
+.rp-intro { color: var(--text-2); margin: 0 0 14px; }
+.rp-now { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 14px; border: var(--rule) solid var(--line-2); border-radius: var(--radius); }
+.rp-now span { flex: 1; color: var(--text-2); }
+.rp-group { margin: 16px 0 6px; color: var(--text-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.rp-item { display: flex; align-items: center; gap: 14px; padding: 12px; border: var(--rule) solid var(--line); border-radius: var(--radius); margin-bottom: 8px; }
+.rp-item:hover { border-color: var(--line-3); }
+.rp-item.cur { border-color: var(--text-2); }
+.rp-main { flex: 1; min-width: 0; }
+.rp-main b { display: block; font-size: 16px; }
+.rp-main .rp-sub { color: var(--text-2); font-size: 12.5px; margin-top: 2px; }
+.rp-moments { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 7px; }
+.rp-moments span { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-2); }
+.rp-moments i { width: 3px; height: 10px; border-radius: 1px; background: var(--text-3); }
+.rp-moments .m-start i { background: var(--flag-green); }
+.rp-moments .m-red i { background: var(--flag-red); }
+.rp-moments .m-sc i, .rp-moments .m-vsc i { background: var(--flag-sc); }
+.rp-moments .m-end i { background: var(--text); }
+.rp-item .tag { margin-left: 6px; vertical-align: 2px; }
+.rp-empty { color: var(--text-2); padding: 18px 0; }
 
 /* ================================================================ driver photos, logos, penalties */
 .av { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex: none; background: var(--panel-3); box-shadow: 0 0 0 1.5px var(--tc, var(--line-3)); align-self: center; }
@@ -916,3 +977,5 @@ body[data-track="red"] .status-pill .flagicon { animation: beacon 1.1s var(--eas
 .dv-head > *:not(.dv-car) { position: relative; }
 .dv-logo { height: 13px; width: auto; vertical-align: -2px; margin-right: 5px; opacity: .9; }
 .dv-who b .d-pen { font-size: 11px; margin-left: 6px; vertical-align: 3px; }
+.rp-item .btn, .rp-now .btn { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.rp-item .btn svg { width: 13px; height: 13px; }
