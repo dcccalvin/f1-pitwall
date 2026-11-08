@@ -95,6 +95,7 @@ server/
   record.js               `npm run record`: recorder without the dashboard
   timeline.js             State + rolling history, so each screen can watch with its own delay
   weekend.js              "Up next": next session, starting grid after penalties, start forecast
+  transcribe.js           Team radio -> text with a local Whisper model (queue, cache, model loading)
   config.js               Reads config.json and environment variables
 
 public/
@@ -120,7 +121,7 @@ public/
     battles.js            Close fights (cars within a second)
     moments.js            "What just happened" feed: passes, pits, fastest laps, flags, penalties, lights out
     racecontrol.js        Race control messages
-    radio.js              Team radio player with voice filter
+    radio.js              Team radio player: voice filter, transcripts, the who's-talking pop-up with live captions
     strategy.js           Tyre stints per driver
     telemetry.js          Car telemetry (F1 TV only)
     sheet.js              Phone: driver detail sheet
@@ -173,6 +174,8 @@ Server → browser:
 | `replay` | `info` | Replay player changes. |
 | `ping` | `serverNow, lastDataAt, mode` | Every 5 s (clock sync, "no data" warning). |
 | `toast` | `text` | A one-off message for this screen. |
+| `transcript` | `clip, entry` | A radio clip has been transcribed. |
+| `transcriber` | `status` | Speech model status (loading, working, unavailable...). |
 
 Browser → server: `{ type: 'delay', seconds }` and `{ type: 'sync', driver }` ("this car crossed the line on my TV now").
 
@@ -231,6 +234,7 @@ Things that are not obvious and that the code depends on:
 | `GET /api/recordings` | Saved sessions with title, length and key moments. |
 | `POST /api/replay` | Player control: `{ action: 'play' | 'pause' | 'speed' | 'seek' | 'jump', value? }` (any screen). |
 | `GET /api/history` | Lap history snapshot for the charts. |
+| `GET /api/transcripts?session` | Team radio transcripts for a session, and the speech model's status. |
 | `GET /api/forecast?lat&lon` | 3-hour rain forecast on a 7×7 grid around the circuit (Open-Meteo). |
 | `GET /api/radar` | RainViewer radar frame list. |
 | `GET /api/nextup` | Next session, starting grid after penalties, start forecast (`server/weekend.js`). `?fresh` skips the cache. |
@@ -244,7 +248,15 @@ Everything else is served from `public/`.
 
 Add a branch in the request handler in `server/index.js` (they're plain `if (url.pathname === '/api/...')` checks) and reply with `sendJson(res, status, data)`. For outside services, follow the existing pattern: send a `user-agent`, set a timeout, cache the answer in memory (or in `cache/` for files), and return something sensible when the service is down. The page should never break because an outside service did.
 
-### 6.3 Connection handling (`server/f1feed.js`)
+### 6.3 Radio transcription (`server/transcribe.js`)
+
+When a session state arrives or a new `TeamRadio` capture comes in, the server queues the clip (new live clips first, then the backlog newest first). One clip at a time: download (shared with `/api/radio` and its cache), decode the mp3 with `mpg123-decoder` (a fresh decoder per clip), average down to 16 kHz mono, run Whisper through `@huggingface/transformers` on the CPU with `return_timestamps`, drop things Whisper invents from noise ("Thank you.", "[music]"), save to `cache/transcripts.json` and broadcast `{ type: 'transcript', clip, entry }`. `entry` is `{ text, chunks: [{ t: [start, end], text }], secs, took, model }`. The model loads on first use and unloads after 20 idle minutes. `GET /api/transcripts?session=<SessionInfo.Path>` returns a session's saved transcripts and the model status.
+
+Screens only show a transcript once the clip itself is in their (delayed) state, so the text never runs ahead of the TV. The pop-up's live caption spreads each chunk's words evenly across its start and end times (`#caption()` in `radio.js`).
+
+Model choice (`transcribeModel`, `transcribeDtype` in `config.json`): `whisper-small.en` q8 takes about 5–6 s per clip on a laptop CPU and copes with engine noise much better than `whisper-base.en` (about 2 s per clip).
+
+### 6.4 Connection handling (`server/f1feed.js`)
 
 `F1Feed` reconnects with its own schedule (1, 2, 4, 8, 15 s), classifies network errors as `offline`, and forces a reconnect when nothing (not even a heartbeat) has arrived for 45 s. Its `status` tells the browser when the link went down, when it will retry and how long it was down; the yellow/red bar under the top bar is drawn from that.
 
@@ -394,13 +406,14 @@ Everything is free and needs no account. If one disappears, only its own feature
 | OpenF1 (`api.openf1.org`) | Up next: sessions, starting grid, qualifying result, drivers | Falls back to formula1.com's grid and the feed's own qualifying order. |
 | formula1.com results pages | Penalty explanation under the grid (and the grid itself as a fallback) | The grid still shows; drivers read "Down 5" without a reason. |
 | Open-Meteo | Rain forecast on the radar, forecast for the start | No forecast. |
+| Hugging Face (first run only) | Downloading the Whisper speech model into `cache/models/` | Transcription waits until it can download; once downloaded it works offline. |
 | RainViewer | Radar frames | No radar frames. |
 | Esri (ArcGIS) | Grey base map under the radar | Radar without a base map. |
 | Jolpica (Ergast) | Season schedule, circuit coordinates | No schedule-based countdown or weather location. |
 
 ## 11. Conventions
 
-- **No build step, no framework, three dependencies** (`ws`, `@microsoft/signalr`, `qrcode`). Keep it that way unless there is a strong reason: anyone can open a file and change it.
+- **No build step, no framework, few dependencies**: `ws`, `@microsoft/signalr`, `qrcode`, plus `@huggingface/transformers` and `mpg123-decoder` for radio transcription (loaded only when needed; Pit Wall runs without them). Keep it that way unless there is a strong reason: anyone can open a file and change it.
 - **Comments say why**, not what. The feed has many traps (section 5); when you work around one, write down what F1 does.
 - **Escape everything** that comes from outside before it goes into HTML (`esc()`).
 - **Fail soft.** An outside service, a broken image or one view's bug must never take the dashboard down.
