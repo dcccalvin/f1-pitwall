@@ -3,8 +3,11 @@
 // a countdown to the next session, the weather forecast for its start and, before
 // a race or sprint, the starting grid after penalties and why it differs from
 // qualifying.
-import { esc, fmtClock, sessionOver, startProcedure, sessionKind, sessionLocalTime, currentStint, compoundLetter } from '../format.js';
+import { esc, fmtClock, sessionOver, startProcedure, sessionKind, sessionPhase, sessionLocalTime, currentStint, compoundLetter, driverOrder, teamColor } from '../format.js';
 import { avatar } from '../media.js';
+import { penalties } from '../penalties.js';
+import { investigations, STATUS_LABEL } from '../investigations.js';
+import { raceGaps } from '../racegaps.js';
 
 const DROP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5C6 4.6 3.8 7 3.8 9.6a4.2 4.2 0 0 0 8.4 0C12.2 7 10 4.6 8 1.5Z" fill="currentColor"/></svg>';
 
@@ -44,9 +47,17 @@ export class NextUp {
     const s = this.store.state;
     const mode = this.store.status?.mode;
     if (!Object.keys(s.TimingData?.Lines || {}).length) return true;
+    if (this.results()) return true;
     if (mode !== 'live') return false;
     const now = this.store.dataNow();
     return sessionOver(s, now) || startProcedure(s, now)?.stage === 'countdown';
+  }
+
+  /** A race or sprint has just finished (chequered flag shown, not yet an old session). */
+  results() {
+    const s = this.store.state;
+    if (sessionKind(s) !== 'race' || sessionPhase(s) !== 'finished') return false;
+    return !(this.store.status?.mode === 'live' && sessionOver(s, this.store.dataNow()));
   }
 
   /** Show it in place of the timing tower? (the user can switch to the timing and back) */
@@ -69,6 +80,7 @@ export class NextUp {
   /** The panel content (redrawn only when the data changes; the countdown ticks in frame()). */
   render(el) {
     this.el = el;
+    if (this.results()) { this.#renderResults(el); return; }
     this.load();
     const d = this.data;
     const s = this.store.state;
@@ -147,6 +159,88 @@ export class NextUp {
         <span class="tag${g.status === 'official' ? ' ok' : ''}">${g.status === 'official' ? 'After penalties' : 'Provisional · qualifying order'}</span>
         <span class="muted nu-src">from ${esc(g.from)}${g.status !== 'official' ? ' · penalties may still change it' : ''}</span></div>
       <div class="nu-gridwrap"><div class="nu-line" aria-hidden="true"></div><div class="nu-grid">${slots}</div></div>${why}`;
+  }
+
+  /**
+   * After the chequered flag: podium, classification (places gained from the grid,
+   * gaps, stops, best laps), the fastest lap, unserved time penalties added, and the
+   * stewards' cases still open.
+   */
+  #renderResults(el) {
+    const s = this.store.state;
+    const lines = s.TimingData?.Lines || {};
+    const dl = s.DriverList || {};
+    const app = s.TimingAppData?.Lines || {};
+    const order = driverOrder(s).filter((n) => lines[n]);
+    const pens = penalties(s, this.store.history);
+    const cases = investigations(s).filter((x) => x.status === 'after' || x.status === 'investigating');
+    // Fastest lap: the quickest personal best in the field.
+    let fl = null;
+    for (const n of order) {
+      const v = lines[n]?.BestLapTime?.Value;
+      const sec = v && /^(\d+):(\d+\.\d+)$/.exec(v);
+      const t = sec ? Number(sec[1]) * 60 + Number(sec[2]) : null;
+      if (t && (!fl || t < fl.t)) fl = { n, t, v, lap: lines[n].BestLapTime.Lap };
+    }
+    // Unserved time penalties change the order: add them to each car's race time.
+    const owed = Object.fromEntries(order.map((n) => [n, pens[n]?.pending || 0]));
+    const anyOwed = Object.values(owed).some(Boolean);
+    let finalOrder = order;
+    if (anyOwed) {
+      const gaps = raceGaps(s);
+      finalOrder = [...order].sort((a, b) => {
+        const ra = lines[a].Retired || lines[a].Stopped, rb = lines[b].Retired || lines[b].Stopped;
+        if (ra !== rb) return ra ? 1 : -1;
+        return (gaps[a] ?? 1e9) + owed[a] - ((gaps[b] ?? 1e9) + owed[b]);
+      });
+    }
+    const key = `res|${finalOrder.join(',')}|${order.map((n) => lines[n]?.GapToLeader).join(',')}|${cases.length}|${this.store.selected}|${document.body.dataset.theme}`;
+    if (key === this.drawn) return;
+    this.drawn = key;
+    el.classList.add('hub');
+    const who = (n) => dl[n] || { RacingNumber: n, Tla: n };
+    const gapText = (n) => {
+      const l = lines[n];
+      if (l.Retired) return 'DNF';
+      if (l.Stopped) return 'Stopped';
+      const g = String(l.GapToLeader || '');
+      if (finalOrder[0] === n) return 'Winner';
+      const lapped = /^(\d+)\s*L$/i.exec(g);
+      if (lapped) return `+${lapped[1]} lap${lapped[1] === '1' ? '' : 's'}`;
+      return g || '–';
+    };
+    const podium = finalOrder.slice(0, 3).map((n, i) => {
+      const d = who(n);
+      return `<div class="rs-pod p${i + 1}" data-select="${esc(n)}" style="--tc:${teamColor(d)}">
+        <span class="rs-place">${i + 1}</span>${avatar(d, 'av')}<b>${esc(d.Tla || n)}</b><small>${esc(d.TeamName || '')}</small><em>${esc(gapText(n))}</em></div>`;
+    });
+    const rows = finalOrder.map((n, i) => {
+      const d = who(n);
+      const l = lines[n];
+      const grid = Number(app[n]?.GridPos) || null;
+      const pos = i + 1;
+      const moved = grid && !l.Retired ? grid - pos : null;
+      const chg = moved > 0 ? `<span class="nu-chg up">▲${moved}</span>` : moved < 0 ? `<span class="nu-chg down">▼${-moved}</span>` : '<span class="nu-chg">–</span>';
+      const pen = owed[n] ? `<span class="d-pen">+${owed[n]}s</span>` : '';
+      const open = cases.some((x) => x.cars.some((c) => c.num === n)) ? '<span class="d-inv after" title="Still with the stewards">INV</span>' : '';
+      return `<div class="rs-row${this.store.selected === n ? ' mine' : ''}${l.Retired || l.Stopped ? ' out' : ''}" data-select="${esc(n)}" style="--tc:${teamColor(d)}">
+        <span class="rs-pos">${l.Retired || l.Stopped ? '–' : pos}</span>${avatar(d, 'av av-sm')}<b>${esc(d.Tla || n)}</b><span class="rs-team">${esc(d.TeamName || '')}</span><span class="rs-tags">${pen}${open}</span>
+        <span class="rs-grid">${grid ? `P${grid}` : ''}</span>${chg}<span class="rs-gap">${esc(gapText(n))}</span>
+        <span class="rs-stops">${esc(l.NumberOfPitStops ?? '')}</span><span class="rs-best${fl?.n === n ? ' purple' : ''}">${esc(l.BestLapTime?.Value || '')}</span></div>`;
+    }).join('');
+    const changed = anyOwed ? finalOrder.map((n, i) => ({ n, from: order.indexOf(n) + 1, to: i + 1 })).filter((x) => x.from !== x.to) : [];
+    const name = s.SessionInfo?.Meeting?.Name || '';
+    el.innerHTML = `<div class="nu rs">
+      <div class="rs-head"><div><div class="nu-k">Provisional result${anyOwed ? ' · time penalties added' : ''}</div>
+        <div class="nu-title">${esc(name)}${name ? ' · ' : ''}<b>${esc(s.SessionInfo?.Name || 'Race')}</b>${s.LapCount?.TotalLaps ? ` · ${esc(s.LapCount.TotalLaps)} laps` : ''}</div></div>
+        <button class="btn" data-hub="show">Show timing</button></div>
+      <div class="rs-podium">${[podium[1], podium[0], podium[2]].filter(Boolean).join('')}</div>
+      ${fl ? `<p class="rs-fl"><span class="rs-flag">Fastest lap</span> <b data-select="${esc(fl.n)}">${esc(who(fl.n).Tla || fl.n)}</b> ${esc(fl.v)}${fl.lap ? ` · lap ${esc(fl.lap)}` : ''}</p>` : ''}
+      ${changed.length ? `<p class="nu-note">Time penalties added: ${changed.map((x) => `${esc(who(x.n).Tla || x.n)} P${x.from} → P${x.to}`).join(', ')}.</p>` : ''}
+      <div class="rs-table"><div class="rs-row rs-th"><span class="rs-pos">Pos</span><span></span><b>Driver</b><span class="rs-team"></span><span class="rs-tags"></span><span class="rs-grid">Grid</span><span class="nu-chg">+/−</span><span class="rs-gap">Gap</span><span class="rs-stops">Stops</span><span class="rs-best">Best lap</span></div>${rows}</div>
+      ${cases.length ? `<div class="nu-why"><h4>Still with the stewards</h4>${cases.map((x) => `<div class="rs-case"><b>${x.cars.map((c) => esc(c.tla)).join(' & ')}</b><span>${esc(STATUS_LABEL[x.status])}</span><em>${esc(x.reason || 'Incident')}${x.where ? ` · ${esc(x.where.toLowerCase())}` : ''}</em></div>`).join('')}
+        <p class="nu-note">These can still change the result.</p></div>` : ''}
+    </div>`;
   }
 
   frame() {
