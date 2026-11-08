@@ -16,6 +16,7 @@ import QRCode from 'qrcode';
 import { F1Feed } from './f1feed.js';
 import { Simulator } from './simulator.js';
 import { Replayer, describe } from './replay.js';
+import { nextUp } from './weekend.js';
 import { Recorder, recordingPath } from './recorder.js';
 import { LapHistory } from '../public/js/history.js';
 import { applyMessage as applyMsg } from '../public/js/merge.js';
@@ -402,6 +403,11 @@ const server = http.createServer(async (req, res) => {
         if (r?.ok) radarCache = { at: Date.now(), data: await r.json() };
       }
       return radarCache.data ? sendJson(res, 200, radarCache.data) : sendJson(res, 502, { error: 'radar unavailable' });
+    }
+    if (url.pathname === '/api/nextup') {
+      // Next session, starting grid (after penalties) and start-time weather, for the screen between sessions.
+      const sch = await schedule().catch(() => null);
+      return sendJson(res, 200, await nextUp(sch, { force: url.searchParams.has('fresh'), state: timeline.state }));
     }
     if (url.pathname === '/api/schedule') {
       try { return sendJson(res, 200, await schedule()); } catch (e) { return sendJson(res, 200, { sessions: [], error: e.message }); }
