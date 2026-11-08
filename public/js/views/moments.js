@@ -40,6 +40,12 @@ export class Moments {
     this.drawn = -1;
   }
 
+  /** A note from elsewhere in the app (e.g. the lap-time weather signals). */
+  note(t, state, text, cls = 'rain') {
+    this.#add(t, state, { kind: 'flag', cls, text: esc(text) });
+    this.drawn = -1;
+  }
+
   #add(t, state, m) {
     // In a replay the clock that matters is the one in the recording.
     const when = this.store.status?.mode === 'replay' ? this.store.dataNow() : t;
