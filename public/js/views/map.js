@@ -1,6 +1,6 @@
 // Track map: circuit outline (MultiViewer's public circuit data) with a dot per car.
 // Positions are estimated from timing loops (free) or real GPS (F1 TV).
-import { esc, teamColor, driverOrder, trackState, sessionPhase } from '../format.js';
+import { esc, teamColor, driverOrder, trackState, sessionPhase, sessionOver } from '../format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const rad = (d) => (d * Math.PI) / 180;
@@ -215,7 +215,8 @@ export class TrackMap {
     if (trackState(s).key === 'green' && this.flagged.size) { this.flagged.clear(); this.#applyFlags(); }
 
     const lines = s.TimingData?.Lines || {};
-    const inPit = driverOrder(s).filter((n) => lines[n]?.InPit && !lines[n]?.Retired);
+    const over = this.store.status?.mode === 'live' && sessionOver(s, this.store.dataNow());
+    const inPit = over ? [] : driverOrder(s).filter((n) => lines[n]?.InPit && !lines[n]?.Retired);
     const dl = s.DriverList || {};
     const yellow = [...this.flagged].filter(([, f]) => f === 'yellow').map(([n]) => n).sort((a, b) => a - b);
     const red = [...this.flagged].filter(([, f]) => f === 'red').map(([n]) => n);
@@ -240,6 +241,8 @@ export class TrackMap {
     // Before lights out the cars sit on the grid (F1's free feed has nothing while they
     // do the formation lap); a car only leaves its slot if the timing shows it moving.
     const onGrid = !live && kind(s) === 'race' && sessionPhase(s) === 'pre';
+    // An old session the feed keeps re-sending: no cars on the map.
+    const over = this.store.status?.mode === 'live' && sessionOver(s, this.store.dataNow());
     const seen = new Set();
     const labels = []; // placed label boxes, so crowded labels can be hidden
     const lw = this.circuit.size * 0.075, lh = this.circuit.size * 0.04;
@@ -255,7 +258,7 @@ export class TrackMap {
       const l = lines[num];
       if (!l) return;
       let p = null;
-      if (live) {
+      if (over) { /* nothing running */ } else if (live) {
         const g = this.gps.pos(num, now);
         if (g && !(g.x === 0 && g.y === 0) && !(kind(s) !== 'race' && l.InPit)) p = rotate(g.x, g.y, this.circuit.rot, this.circuit.cx, this.circuit.cy);
       } else if (onGrid && !l.InPit && !l.Retired && !l.Stopped && !l.PitOut && !(this.est.last(num)?.t > now - 25000)) {

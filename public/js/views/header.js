@@ -1,5 +1,5 @@
 // Top bar: event, track status, lap / clock, weather, delay control, connection.
-import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder, sessionStartUtc, startProcedure } from '../format.js';
+import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder, sessionStartUtc, startProcedure, sessionOver } from '../format.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,7 +71,10 @@ export class Header {
     // restart after a red flag; not when the safety car leads them away).
     if (!fresh && kind === 'race' && phase === 'running' && ['pre', 'paused', 'suspended'].includes(this.phase) && ts.key !== 'sc') this.store.lightsOut?.();
     this.phase = phase;
-    if ($('track-label').textContent !== ts.label) $('track-label').textContent = ts.label;
+    // An old session the feed keeps re-sending: say it's over, count down to what's next.
+    const over = this.store.status?.mode === 'live' && sessionOver(s, dnow);
+    const label = over ? `${info.Name || 'Session'} finished` : ts.label;
+    if ($('track-label').textContent !== label) $('track-label').textContent = label;
 
     const restart = restartInfo(s);
     const proc = startProcedure(s, dnow);
@@ -79,7 +82,10 @@ export class Header {
     // a frozen clock. Count down to the announced (re)start time instead.
     this.countTo = null;
     this.formation = null;
-    if (proc?.stage === 'countdown') {
+    const nx = this.store.nextup?.next;
+    if (over) {
+      if (nx?.start) { this.countTo = Date.parse(nx.start); this.countLabel = [`${nx.name} in`, `${nx.name} starting`]; }
+    } else if (proc?.stage === 'countdown') {
       this.countTo = proc.to;
       this.countLabel = ['Starts in', 'Starting'];
     } else if (proc) {
@@ -207,7 +213,7 @@ export class Header {
       const left = (this.countTo - now) / 1000;
       // Reaching the scheduled start of a race means the formation lap: redraw.
       if (left <= 0 && this.countedTo !== this.countTo) { this.countedTo = this.countTo; this.store.dirty(); }
-      const txt = left > 0 ? fmtClock(left) : 'Soon';
+      const txt = left > 0 ? (left >= 86400 ? `${Math.floor(left / 86400)}d ${fmtClock(left % 86400)}` : fmtClock(left)) : 'Soon';
       const el = $('lc-value');
       if (el.textContent !== txt) el.textContent = txt;
       const label = this.countLabel[left > 0 ? 0 : 1];

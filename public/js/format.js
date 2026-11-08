@@ -127,6 +127,27 @@ export function sessionStartUtc(info) {
   return local - off * 60000;
 }
 
+/** SessionInfo.EndDate (scheduled end, local track time) as UTC ms. */
+export function sessionEndUtc(info) {
+  return info?.EndDate ? sessionStartUtc({ StartDate: info.EndDate, GmtOffset: info.GmtOffset }) : null;
+}
+
+/**
+ * Is this an old, finished session? Between sessions F1's feed keeps sending the
+ * last one (e.g. Saturday's qualifying, status "Ends") every time it reconnects.
+ * Over = finished and more than an hour past its scheduled end (or "Ends"/"Finalised"
+ * with no end time known).
+ */
+export function sessionOver(state, now = Date.now()) {
+  const st = state?.SessionStatus?.Status;
+  if (!['Finished', 'Finalised', 'Ends'].includes(st) || state?.SessionInfo?.Replay) return false;
+  // Q1 and Q2 also end "Finished"; a long red flag can push them past the scheduled end.
+  if (st === 'Finished' && sessionKind(state) === 'quali' && (Number(state?.TimingData?.SessionPart) || 3) < 3) return false;
+  const end = sessionEndUtc(state.SessionInfo);
+  if (end) return now > end + 60 * 60000;
+  return st === 'Ends' || st === 'Finalised';
+}
+
 /**
  * Race / sprint start procedure. On F1's free feed a race stays "Inactive" through
  * the formation lap and only becomes "Started" at lights out, so: past the scheduled
