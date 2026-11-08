@@ -15,7 +15,7 @@ import QRCode from 'qrcode';
 
 import { F1Feed } from './f1feed.js';
 import { Simulator } from './simulator.js';
-import { Replayer } from './replay.js';
+import { Replayer, describe } from './replay.js';
 import { Recorder, recordingPath } from './recorder.js';
 import { LapHistory } from '../public/js/history.js';
 import { applyMessage as applyMsg } from '../public/js/merge.js';
@@ -43,7 +43,7 @@ let recorder = null;
 let source = null;
 let sourceStatus = { state: 'starting', detail: '' };
 const history = new LapHistory();
-let sourceOpts = { f1tv: flag('f1tv'), speed: Number(opt('speed', 1)), skip: Number(opt('skip', 0)), file: null };
+let sourceOpts = { f1tv: flag('f1tv'), speed: Number(opt('speed', 1)), skip: opt('skip', null) == null ? null : Number(opt('skip', 0)), file: null };
 
 function latestRecording() {
   if (!fs.existsSync(recordingsDir)) return null;
@@ -79,6 +79,7 @@ function startSource() {
     history.onMessage(Date.now(), topic, data, timeline.state);
     recorder?.feed(topic, data, ts);
   });
+  source.on('replay', (info) => broadcast({ type: 'replay', info }));
   source.on('skip', (e, state) => history.onMessage(e.t, e.type === 'init' ? '__init' : e.topic, e.data, state));
   source.start();
 }
@@ -106,15 +107,46 @@ function backfillHistory(state) {
 async function switchSource(newMode, opts = {}) {
   if (source) { source.removeAllListeners(); await source.stop?.(); }
   mode = newMode;
-  sourceOpts = { f1tv: !!opts.f1tv, speed: Number(opts.speed) || 1, skip: Number(opts.skip) || 0, file: opts.file || null };
+  sourceOpts = { f1tv: !!opts.f1tv, speed: Number(opts.speed) || 1, skip: opts.skip == null ? null : Number(opts.skip) || 0, file: opts.file || null };
   timeline = new Timeline();
   history.reset(null);
   sourceStatus = { state: 'starting', detail: '' };
   startSource();
   for (const c of clients) {
-    send(c.ws, { type: 'hello', mode, status: statusPayload(), maxDelay: MAX_DELAY_S, serverNow: Date.now() });
+    send(c.ws, hello());
     sendFull(c);
   }
+}
+
+function hello() {
+  return { type: 'hello', mode, status: statusPayload(), maxDelay: MAX_DELAY_S, serverNow: Date.now(), replay: mode === 'replay' ? source?.info?.() ?? null : null };
+}
+
+/** Replay: jump to a moment. Every screen starts again from the state at that moment. */
+function replaySeek(sec) {
+  timeline = new Timeline();
+  history.reset(null);
+  source.seek(sec);
+  for (const c of clients) { send(c.ws, hello()); sendFull(c); }
+}
+
+// Replay list: title, length and key moments of each recording (cached until the file changes).
+const describeCache = new Map();
+function recordingList() {
+  if (!fs.existsSync(recordingsDir)) return [];
+  return fs.readdirSync(recordingsDir).filter((f) => f.endsWith('.jsonl')).map((f) => {
+    const file = path.join(recordingsDir, f);
+    const st = fs.statSync(file);
+    const key = `${st.size}:${st.mtimeMs}`;
+    let hit = describeCache.get(f);
+    if (!hit || hit.key !== key) {
+      let d;
+      try { d = describe(file); } catch { d = { name: f, session: f.replace(/\.jsonl$/, '').replace(/_/g, ' '), broken: true, marks: [] }; }
+      hit = { key, d };
+      describeCache.set(f, hit);
+    }
+    return { ...hit.d, size: st.size, mtime: st.mtimeMs, recording: !!(recorder?.file && path.resolve(recorder.file) === file) };
+  }).sort((a, b) => (b.recordedAt || b.mtime) - (a.recordedAt || a.mtime));
 }
 
 // Remaining sessions this season, from the free Jolpica (Ergast) API; cached 6h.
@@ -341,10 +373,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, mode });
     }
     if (url.pathname === '/api/recordings') {
-      const files = fs.existsSync(recordingsDir) ? fs.readdirSync(recordingsDir).filter((f) => f.endsWith('.jsonl'))
-        .map((f) => { const st = fs.statSync(path.join(recordingsDir, f)); return { name: f, size: st.size, mtime: st.mtimeMs }; })
-        .sort((a, b) => b.mtime - a.mtime) : [];
-      return sendJson(res, 200, { files });
+      return sendJson(res, 200, { files: recordingList(), canSwitch: isLocal(req), mode });
+    }
+    if (url.pathname === '/api/replay' && req.method === 'POST') {
+      // Play / pause / speed / jump. Any screen may drive a replay (it is not live data).
+      if (mode !== 'replay' || !source?.seek) return sendJson(res, 409, { error: 'No replay is playing.' });
+      const body = await readBody(req);
+      const v = Number(body.value);
+      if (body.action === 'pause') source.pause();
+      else if (body.action === 'play') source.play();
+      else if (body.action === 'speed' && v > 0) source.setSpeed(v);
+      else if (body.action === 'seek' && Number.isFinite(v)) replaySeek(v);
+      else if (body.action === 'jump' && Number.isFinite(v)) replaySeek(source.position() / 1000 + v);
+      else return sendJson(res, 400, { error: 'unknown action' });
+      return sendJson(res, 200, source.info());
     }
     if (url.pathname === '/api/history') return sendJson(res, 200, history.snapshot());
     if (url.pathname === '/api/forecast') {
@@ -403,7 +445,7 @@ function sendFull(c) {
 wss.on('connection', (ws) => {
   const c = { ws, delay: cfg.defaultDelay, seq: 0 };
   clients.add(c);
-  send(ws, { type: 'hello', mode, status: statusPayload(), maxDelay: MAX_DELAY_S, serverNow: Date.now() });
+  send(ws, hello());
   sendFull(c);
   ws.on('message', (raw) => {
     let msg;
