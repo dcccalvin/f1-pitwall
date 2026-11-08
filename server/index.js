@@ -17,6 +17,7 @@ import { F1Feed } from './f1feed.js';
 import { Simulator } from './simulator.js';
 import { Replayer, describe } from './replay.js';
 import { nextUp } from './weekend.js';
+import { Transcriber } from './transcribe.js';
 import { Recorder, recordingPath } from './recorder.js';
 import { LapHistory } from '../public/js/history.js';
 import { applyMessage as applyMsg } from '../public/js/merge.js';
@@ -44,6 +45,20 @@ let recorder = null;
 let source = null;
 let sourceStatus = { state: 'starting', detail: '' };
 const history = new LapHistory();
+
+// Team radio -> text, on this laptop (see server/transcribe.js).
+const transcriber = new Transcriber({ cacheDir, getClip, model: cfg.transcribeModel, dtype: cfg.transcribeDtype, enabled: cfg.transcribe });
+transcriber.on('text', (clip, entry) => broadcast({ type: 'transcript', clip, entry }));
+transcriber.on('status', (status) => broadcast({ type: 'transcriber', status }));
+
+/** Queue a session's radio clips for transcription: new live clips first, then the backlog, newest first. */
+function queueClips(state, data, urgent) {
+  const base = state?.SessionInfo?.Path;
+  const raw = data?.Captures;
+  const caps = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter((c) => c?.Path);
+  if (!base || !caps.length) return;
+  for (const c of (urgent ? caps : caps.slice().reverse())) transcriber.add(base + c.Path, { urgent });
+}
 let sourceOpts = { f1tv: flag('f1tv'), speed: Number(opt('speed', 1)), skip: opt('skip', null) == null ? null : Number(opt('skip', 0)), file: null };
 
 function latestRecording() {
@@ -74,11 +89,13 @@ function startSource() {
     history.onMessage(Date.now(), '__init', state, timeline.state);
     if (fresh && mode === 'live') backfillHistory(state);
     recorder?.init(state);
+    queueClips(state, state.TeamRadio, false);
   });
   source.on('feed', (topic, data, ts) => {
     timeline.push(topic, data);
     history.onMessage(Date.now(), topic, data, timeline.state);
     recorder?.feed(topic, data, ts);
+    if (topic === 'TeamRadio') queueClips(timeline.state, data, true);
   });
   source.on('replay', (info) => broadcast({ type: 'replay', info }));
   source.on('skip', (e, state) => history.onMessage(e.t, e.type === 'init' ? '__init' : e.topic, e.data, state));
@@ -281,18 +298,26 @@ async function circuit(key, year) {
 
 // Team radio clips: proxied (and cached) so they work the same on every device,
 // and so an F1 TV token can be attached if F1 ever locks them.
-async function radio(req, res, clipPath) {
-  if (!/^\d{4}\/[^?#]+\/TeamRadio\/[\w.-]+\.mp3$/.test(clipPath) || clipPath.includes('..')) return sendJson(res, 400, { error: 'bad path' });
+const goodClip = (p) => /^\d{4}\/[^?#]+\/TeamRadio\/[\w.-]+\.mp3$/.test(p) && !p.includes('..');
+
+/** A team radio clip's mp3, downloaded once and kept in cache/radio/. */
+async function getClip(clipPath) {
+  if (!goodClip(clipPath)) throw Object.assign(new Error('bad path'), { status: 400 });
   const file = path.join(cacheDir, 'radio', clipPath.replace(/[\\/:*?"<>|]+/g, '_'));
   if (!fs.existsSync(file)) {
     const headers = { 'user-agent': 'pitwall-dashboard' };
     if (cfg.f1tvToken) headers.authorization = `Bearer ${cfg.f1tvToken}`;
-    const r = await fetch(`https://livetiming.formula1.com/static/${encodeURI(clipPath)}`, { headers }).catch(() => null);
-    if (!r || !r.ok) return sendJson(res, r?.status || 502, { error: 'clip unavailable', status: r?.status });
+    const r = await fetch(`https://livetiming.formula1.com/static/${encodeURI(clipPath)}`, { headers, signal: AbortSignal.timeout(20000) }).catch(() => null);
+    if (!r || !r.ok) throw Object.assign(new Error('clip unavailable'), { status: r?.status || 502 });
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, Buffer.from(await r.arrayBuffer()));
   }
-  const buf = fs.readFileSync(file);
+  return fs.readFileSync(file);
+}
+
+async function radio(req, res, clipPath) {
+  let buf;
+  try { buf = await getClip(clipPath); } catch (e) { return sendJson(res, e.status || 502, { error: e.message }); }
   const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/);
   if (range) {
     const start = range[1] ? Number(range[1]) : 0;
@@ -388,6 +413,9 @@ const server = http.createServer(async (req, res) => {
       else if (body.action === 'jump' && Number.isFinite(v)) replaySeek(source.position() / 1000 + v);
       else return sendJson(res, 400, { error: 'unknown action' });
       return sendJson(res, 200, source.info());
+    }
+    if (url.pathname === '/api/transcripts') {
+      return sendJson(res, 200, { status: transcriber.status(), items: transcriber.forSession(url.searchParams.get('session') || '') });
     }
     if (url.pathname === '/api/history') return sendJson(res, 200, history.snapshot());
     if (url.pathname === '/api/forecast') {

@@ -37,6 +37,9 @@ const store = {
 
   stateGen: 0, // bumped on every full state (connect, delay change, replay jump)
   replay: null, // replay player info from the server, while a replay plays
+  transcripts: new Map(), // radio clip path -> { text, chunks } (made on the laptop)
+  transcriptsVer: 0,
+  transcriber: null, // speech model status
 
   /** Replays run without a TV delay: they are not live. */
   effDelay() { return this.status?.mode === 'replay' ? 0 : this.delay; },
@@ -246,6 +249,13 @@ function onState(m) {
   moments.reset(store.state, m.at);
   history.onMessage(m.at, '__init', store.state, store.state);
   fetch('/api/history').then((r) => r.json()).then((snap) => { history.load(snap); dirty.add('*'); }).catch(() => {});
+  const radioBase = store.state.SessionInfo?.Path;
+  if (radioBase) fetch(`/api/transcripts?session=${encodeURIComponent(radioBase)}`).then((r) => r.json()).then((j) => {
+    store.transcriber = j.status;
+    for (const [k, v] of Object.entries(j.items || {})) store.transcripts.set(k, v);
+    store.transcriptsVer++;
+    dirty.add('*');
+  }).catch(() => {});
   store.clockSeen = { utc: store.state.ExtrapolatedClock?.Utc, t: m.at };
   computeDerived();
   dirty.add('*');
@@ -318,6 +328,8 @@ function connect() {
       store.lastDataAt = m.lastDataAt;
       store.clockOffset = store.clockOffset * 0.8 + (m.serverNow - Date.now()) * 0.2;
     } else if (m.type === 'replay') store.setReplay(m.info);
+    else if (m.type === 'transcript') { store.transcripts.set(m.clip, m.entry); store.transcriptsVer++; dirty.add('*'); }
+    else if (m.type === 'transcriber') { store.transcriber = m.status; store.transcriptsVer++; dirty.add('*'); }
     else if (m.type === 'toast') store.toast(m.text);
   };
   ws.onclose = () => {

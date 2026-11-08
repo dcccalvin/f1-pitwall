@@ -19,6 +19,7 @@ It connects to F1's live timing feed from your own computer and shows it as a we
 - **Pace**: lap-time chart (and gap-to-leader chart in races) for your driver and the top five
 - **Weather radar**: the last two hours of rain around the circuit, with distance rings and wind
 - **Red flags**: the announced restart time with a countdown, plus rain / wet-track / low-grip notices from race control
+- **Team radio transcripts**: every clip is turned into text on your laptop (Whisper speech model, free, nothing leaves the laptop). The text shows under each clip, and while a clip plays a pop-up shows the driver who is talking with the words lighting up as they are said. It can mishear noisy radio. The first time, it downloads the speech model (about 250 MB); while it works it uses about 1 GB of memory, freed after 20 quiet minutes.
 - **Stays up**: if the internet drops, a bar says so and Pit Wall reconnects by itself within seconds of it coming back
 
 **With an F1 TV subscription (Access plan is enough), switched on later**
@@ -111,8 +112,10 @@ The token lasts about 4 days, so repeat once per race weekend. It is stored only
 Copy `config.example.json` to `config.json` to change defaults:
 
 ```json
-{ "port": 3000, "defaultDelay": 0, "f1tvToken": "" }
+{ "port": 3000, "defaultDelay": 0, "f1tvToken": "", "transcribe": true }
 ```
+
+Set `"transcribe": false` to switch radio transcription off. `"transcribeModel"` picks another Whisper model (default `onnx-community/whisper-small.en`; `onnx-community/whisper-base.en` is faster but less accurate).
 
 ## How it works
 

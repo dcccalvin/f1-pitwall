@@ -1,6 +1,6 @@
 {
   "name": "f1-pitwall",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
@@ -10,7 +10,9 @@
   },
   "description": "Personal live F1 timing dashboard for a second screen",
   "dependencies": {
+    "@huggingface/transformers": "^4.3.2",
     "@microsoft/signalr": "^10.0.11",
+    "mpg123-decoder": "^1.0.3",
     "qrcode": "^1.5.4",
     "ws": "^8.22.1"
   },

@@ -1087,3 +1087,12 @@ body.replaying .delay-btn { display: none; }
   .rcard-photo .av { width: 52px; height: 52px; }
 }
 @media (prefers-reduced-motion: reduce) { .radiocard.in, .radiocard.out { animation-duration: .01s; } }
+
+/* team radio transcripts: under each clip, and as live captions in the pop-up */
+.clip-text { margin-top: 4px; font-size: 13px; line-height: 1.35; color: var(--text); }
+.clip-text.wait, .clip-text.none { color: var(--text-3); font-size: 12px; }
+.rcard-text { margin-top: 6px; font-size: 14.5px; line-height: 1.38; color: var(--text-3); max-height: 6.9em; overflow: hidden; }
+.rcard-text b { color: var(--text); font-weight: 600; }
+.rcard-text .wait { font-size: 12.5px; }
+.radiocard { align-items: flex-start; }
+.rcard-photo { align-self: center; }

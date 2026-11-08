@@ -157,6 +157,45 @@ export class TeamRadio {
     this.src.connect(this.clean.checked ? this.chainIn : this.analyser);
   }
 
+  #fullPath(p) { return (this.store.state.SessionInfo?.Path || '') + p; }
+
+  /** The transcript under a clip in the list (or that it's on its way). */
+  #textLine(p) {
+    const e = this.store.transcripts.get(this.#fullPath(p));
+    if (e) return e.text ? `<div class="clip-text" title="Transcribed automatically on this laptop. It can mishear the radio.">“${esc(e.text)}”</div>` : '<div class="clip-text none">No clear speech</div>';
+    const st = this.store.transcriber?.state;
+    if (!st || st === 'off' || st === 'unavailable') return '';
+    return `<div class="clip-text wait">${st === 'loading' ? esc(this.store.transcriber.detail || 'Loading the speech model') + '…' : 'Transcribing…'}</div>`;
+  }
+
+  /**
+   * Live caption in the pop-up: words light up as they are spoken (timed from the
+   * model's chunks, spread evenly inside each chunk); the rest of the line is dimmed.
+   */
+  #caption() {
+    const el = this.cardText;
+    if (!el) return;
+    const e = this.store.transcripts.get(this.cardClip);
+    const st = this.store.transcriber?.state;
+    let html;
+    if (!e) html = !st || st === 'off' || st === 'unavailable' ? '' : '<span class="wait">Transcribing…</span>';
+    else if (!e.text) html = '<span class="wait">No clear speech</span>';
+    else {
+      const t = this.audio.currentTime || 0;
+      const chunks = e.chunks?.length ? e.chunks : [{ t: [0, e.secs || this.audio.duration || 3], text: e.text }];
+      const said = [], ahead = [];
+      for (const c of chunks) {
+        const words = c.text.split(/\s+/).filter(Boolean);
+        const s0 = c.t?.[0] ?? 0, s1 = c.t?.[1] ?? (e.secs || s0 + 3);
+        const n = t >= s1 ? words.length : t <= s0 ? 0 : Math.ceil((words.length * (t - s0)) / Math.max(0.3, s1 - s0));
+        said.push(...words.slice(0, n));
+        ahead.push(...words.slice(n));
+      }
+      html = `<b>${esc(said.join(' '))}</b>${said.length && ahead.length ? ' ' : ''}${esc(ahead.join(' '))}`;
+    }
+    if (html !== this.shownCaption) { el.innerHTML = html; this.shownCaption = html; }
+  }
+
   /** Show who's talking: photo, name, team, position, voice level, progress. */
   #showCard() {
     clearTimeout(this.hideTimer);
@@ -176,6 +215,7 @@ export class TeamRadio {
         <div class="rcard-k"><span class="rcard-level" aria-hidden="true">${'<i></i>'.repeat(BARS)}</span>Team radio${when ? ` · ${esc(when)}` : ''}${tag ? ` · <em class="clip-tag ${tag[0]}">${esc(tag[1])}</em>` : ''}</div>
         <div class="rcard-name"><b>${esc(d.Tla || num)}</b><span>${esc(d.FullName || d.BroadcastName || '')}</span></div>
         <div class="rcard-team">${img(teamLogo(d), 'rcard-logo')}<span>${esc(d.TeamName || '')}${line.Position ? ` · P${esc(line.Position)}` : ''}</span></div>
+        <div class="rcard-text" title="Transcribed automatically on this laptop. It can mishear the radio."></div>
         <div class="rcard-bar"><i></i></div>
       </div>
       <button class="rcard-stop" data-rc="stop" title="Stop" aria-label="Stop"><svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor"/></svg></button>`;
@@ -184,6 +224,9 @@ export class TeamRadio {
     this.card.classList.add('in');
     this.bars = [...this.card.querySelectorAll('.rcard-level i')];
     this.cardBar = this.card.querySelector('.rcard-bar i');
+    this.cardText = this.card.querySelector('.rcard-text');
+    this.cardClip = this.#fullPath(cap.Path);
+    this.shownCaption = null;
     cancelAnimationFrame(this.levelRaf);
     this.#level();
   }
@@ -220,6 +263,7 @@ export class TeamRadio {
         this.bars.forEach((b, i) => { b.style.transform = `scaleY(${(0.35 + 0.3 * Math.abs(Math.sin(t + i * 0.9))).toFixed(3)})`; });
       }
       if (this.audio.duration) this.cardBar.style.width = `${(this.audio.currentTime / this.audio.duration) * 100}%`;
+      this.#caption();
       this.levelRaf = requestAnimationFrame(step);
     };
     step();
@@ -257,8 +301,9 @@ export class TeamRadio {
 
   update() {
     const caps = this.#captures();
-    if (caps.length === this.count && this.drawnSel === this.store.selected) return;
+    if (caps.length === this.count && this.drawnSel === this.store.selected && this.drawnText === this.store.transcriptsVer) return;
     this.drawnSel = this.store.selected;
+    this.drawnText = this.store.transcriptsVer;
     const fresh = this.count >= 0 ? caps.length - this.count : 0;
     this.count = caps.length;
     const dl = this.store.state.DriverList || {};
@@ -271,7 +316,7 @@ export class TeamRadio {
       const mine = String(c.RacingNumber) === String(this.store.selected);
       return `<div class="clip${i < fresh ? ' fresh' : ''}${mine ? ' mine' : ''}" data-path="${esc(c.Path)}" style="--tc:${teamColor(d)}">
         <button class="play" aria-label="Play">${PLAY}</button>
-        <div><div class="clip-who">${avatar(d, "av av-sm")}<b data-select="${esc(c.RacingNumber)}" title="Follow ${esc(d.Tla || c.RacingNumber)}">${esc(d.Tla || c.RacingNumber)}</b>${tag ? `<em class="clip-tag ${tag[0]}" title="What was happening when this clip was recorded">${tag[1]}</em>` : ''}<span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div><div class="clip-bar"><i></i></div></div>
+        <div><div class="clip-who">${avatar(d, "av av-sm")}<b data-select="${esc(c.RacingNumber)}" title="Follow ${esc(d.Tla || c.RacingNumber)}">${esc(d.Tla || c.RacingNumber)}</b>${tag ? `<em class="clip-tag ${tag[0]}" title="What was happening when this clip was recorded">${tag[1]}</em>` : ''}<span>${esc(d.FullName || d.BroadcastName || '')} · ${esc(d.TeamName || '')}</span></div>${this.#textLine(c.Path)}<div class="clip-bar"><i></i></div></div>
         <div class="clip-time" title="Recorded at (track time)">${esc(c.Utc ? sessionLocalTime(c.Utc, off) : '')}</div>
       </div>`;
     }).join('');
