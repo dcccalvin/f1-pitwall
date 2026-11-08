@@ -178,6 +178,9 @@ export class FlagShow {
   /** The five red lights come on one by one, then all go out: the race is on. */
   lightsOut() {
     if (!this.enabled) return;
+    // Two signals can announce the same start (status change and race control's "RACE START").
+    if (Date.now() - (this.lastLights || 0) < 30000) return;
+    this.lastLights = Date.now();
     if (this.mode !== 'flag' || reduced()) { this.glow('green'); return; }
     this.#hide(true);
     const units = Array.from({ length: 5 }, (_, i) => `<div class="lo-unit" style="--i:${i}"><i></i><i></i></div>`).join('');
