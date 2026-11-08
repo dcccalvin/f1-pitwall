@@ -1151,5 +1151,8 @@ body.replaying .delay-btn { display: none; }
 
 /* badges (penalty, stewards, pit) never spill into the next column: the name gives way first */
 .c-driver { overflow: hidden; }
-.c-driver .d-num { flex: none; }
 .c-driver .d-pen, .c-driver .d-inv { margin-left: 2px; }
+.c-driver .d-num { flex: none; }
+/* a penalty or stewards badge needs the room: drop the car number on that row rather than clip anything */
+.c-driver:has(.d-pen:not([hidden]), .d-inv:not([hidden])) .d-num { display: none; }
+.c-driver .d-pen, .c-driver .d-inv, .c-driver .d-badge { flex: none; }
