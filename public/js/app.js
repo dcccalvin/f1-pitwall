@@ -20,6 +20,7 @@ import { FlagShow } from './views/flagshow.js';
 import { DriverSheet } from './views/sheet.js';
 import { Settings } from './views/settings.js';
 import { Replays, ReplayBar } from './views/replay.js';
+import { NextUp } from './views/nextup.js';
 
 const dirty = new Set(['*']);
 
@@ -104,7 +105,10 @@ const store = {
   },
 
   notify(widget) { layout.notify(widget); },
-  renderEmpty(el) { renderEmpty(el); },
+  renderEmpty(el) { nextUp.render(el); },
+  hubWanted() { return nextUp.wanted(); },
+  hubIdle() { return nextUp.idle(); },
+  showTiming: null, // session key whose (finished) timing the user chose to look at
   openLayoutPop() { openLayoutPop(document.getElementById('layout-btn')); },
   onLayout() { dirty.add('*'); },
 };
@@ -136,12 +140,13 @@ const flags = new FlagShow(store);
 store.flagShow = (key, label) => flags.show(key, label);
 store.lightsOut = () => flags.lightsOut();
 const replayBar = new ReplayBar(store);
+const nextUp = new NextUp(store);
 new Replays(store);
 const pace = new Pace(store);
 new Settings(store);
 const layout = new Layout(store);
 
-const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, radar, driverPanel, pace, sheet, replayBar];
+const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, radar, driverPanel, pace, sheet, replayBar, nextUp];
 store.selected = localStorage.getItem('selected') || null;
 
 // Click a driver anywhere to follow them; double-click to open the Driver panel.
@@ -386,28 +391,7 @@ async function wakeLock() {
 document.addEventListener('visibilitychange', wakeLock);
 wakeLock();
 
-// ------------------------------------------------------------------ empty state
-let schedule = null;
-fetch('/api/schedule').then((r) => r.json()).then((s) => { schedule = s; store.schedule = s; dirty.add('*'); }).catch(() => { schedule = { sessions: [] }; });
-
-function renderEmpty(el) {
-  const next = (schedule?.sessions || []).find((x) => Date.parse(x.start) > Date.now() - 2 * 3600e3);
-  const ms = next ? Date.parse(next.start) - Date.now() : 0;
-  const live = next && ms <= 0;
-  const days = Math.floor(ms / 86400e3);
-  const html = `<div>
-    <div class="empty-mark">${WIDGETS.tower.icon}</div>
-    <h3>${store.connected ? 'No live session right now' : 'Connecting to Pit Wall…'}</h3>
-    <p>${store.connected ? 'Timing appears here automatically when cars go out. Leave this page open.' : 'Make sure Pit Wall is running on your laptop.'}</p>
-    ${next ? `<div class="next"><div class="k">${live ? 'Happening now' : 'Next session'}</div><div class="v">${esc(next.race)} · ${esc(next.name)}</div>
-      <div class="cd">${live ? 'Starting…' : days >= 1 ? `${days}d ${fmtClock((ms / 1000) % 86400)}` : fmtClock(ms / 1000)}</div>
-      <div class="k">${new Date(next.start).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} your time</div></div>` : ''}
-    <div class="actions"><button class="btn primary" data-open-replays>Watch a replay</button><button class="btn" id="empty-demo">Try the demo race</button></div>
-  </div>`;
-  if (el.dataset.k !== html) {
-    el.dataset.k = html;
-    el.innerHTML = html;
-    el.querySelector('#empty-demo')?.addEventListener('click', () => document.getElementById('settings-btn').click());
-  }
-}
-setInterval(() => { if (!document.getElementById('empty').hidden) dirty.add('*'); }, 1000);
+// ------------------------------------------------------------------ schedule
+fetch('/api/schedule').then((r) => r.json()).then((sch) => { store.schedule = sch; dirty.add('*'); }).catch(() => {});
+// Between sessions, notice when an old session goes stale or the next one comes close.
+setInterval(() => dirty.add('*'), 30000);

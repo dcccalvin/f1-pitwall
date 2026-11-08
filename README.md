@@ -56,6 +56,16 @@ The terminal prints a second address (like `http://192.168.1.20:3000`) for your 
 
 You can also switch between Live, Demo and Replay from the app without restarting.
 
+## Between sessions
+
+When nothing is running, the timing panel shows what's up next instead of the last session's old timing (F1's feed keeps re-sending it until the next session begins):
+
+- a countdown to the next session, in your time and track time
+- the forecast for the start (temperature, rain chance, the next two hours), from Open-Meteo
+- before a race or sprint: the starting grid after penalties, in two staggered columns like the real grid, with each driver's change from qualifying and why (grid penalties, back of the grid, pit lane), from OpenF1 and F1's own note on formula1.com
+
+"Show … timing" brings back the last session's timing; **Up next** (timing panel) returns.
+
 ## Replays
 
 Every session Pit Wall shows live is saved on the laptop. Press **Replays** in the top bar (or "Watch a replay" when nothing is live) to pick one. A replay starts a minute before the scheduled start, so a race shows the formation lap.

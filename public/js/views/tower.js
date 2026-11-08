@@ -162,8 +162,12 @@ export class Tower {
     const app = s.TimingAppData?.Lines || {};
     const rowH = this.rowH ?? (parseFloat(getComputedStyle(this.root).getPropertyValue('--row-h')) || 36);
 
-    this.empty.hidden = order.length > 0;
-    if (!order.length) this.store.renderEmpty?.(this.empty);
+    // Nothing running (or only an old, finished session): show what's up next instead.
+    const hub = this.store.hubWanted ? this.store.hubWanted() : !order.length;
+    this.empty.hidden = !hub;
+    if (hub) this.store.renderEmpty?.(this.empty);
+    const back = document.getElementById('nextup-btn');
+    if (back) back.hidden = hub || !this.store.hubIdle?.();
 
     // qualifying knockout zone
     const part = Number(s.TimingData?.SessionPart) || 1;
