@@ -45,6 +45,11 @@
 
     <div class="spacer"></div>
 
+    <button class="tb-btn" id="replays-btn" data-open-replays title="Watch a saved session again">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor"/></svg>
+      <span>Replays</span>
+    </button>
+
     <button class="tb-btn" id="layout-btn" title="Layout, text size and colours">
       <svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="7" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="13" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
       <span>Layout</span>
@@ -65,6 +70,8 @@
 
   <div class="netbar" id="netbar" hidden role="status" aria-live="polite"><i></i><span></span></div>
   <div class="flagshow" id="flagshow" hidden aria-hidden="true"></div>
+  <div class="screenglow" id="screenglow" aria-hidden="true"></div>
+  <div class="replaybar" id="replaybar" hidden></div>
 
   <main class="layout" id="layout"></main>
 
@@ -173,6 +180,16 @@
         <button class="icon-btn" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
       <div class="settings-body" id="settings-body"></div>
+    </form>
+  </dialog>
+
+  <dialog class="settings replays" id="replays">
+    <form method="dialog" class="settings-inner">
+      <div class="settings-head">
+        <h2>Replays</h2>
+        <button class="icon-btn" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="settings-body" id="replays-body"></div>
     </form>
   </dialog>
 

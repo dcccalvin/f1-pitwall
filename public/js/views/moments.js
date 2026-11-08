@@ -33,12 +33,17 @@ export class Moments {
       this.prev.set(num, { pos: Number(l.Position), inPit: !!l.InPit, retired: !!l.Retired, stints: st ? Object.keys(st).length : 0 });
     }
     this.track = state?.TrackStatus?.Status ?? null;
+    const ss = state?.SessionStatus || {};
+    this.session = ss.Status ?? null;
+    this.everStarted = ss.Started === 'Started' || ['Started', 'Aborted', 'Finished', 'Finalised', 'Ends'].includes(ss.Status);
     this.rain = state?.WeatherData ? Number(state.WeatherData.Rainfall) > 0 : undefined;
     this.drawn = -1;
   }
 
   #add(t, state, m) {
-    this.items.push({ ...m, t, id: ++this.seq, lap: state.LapCount?.CurrentLap, utc: new Date(t).toISOString() });
+    // In a replay the clock that matters is the one in the recording.
+    const when = this.store.status?.mode === 'replay' ? this.store.dataNow() : t;
+    this.items.push({ ...m, t, id: ++this.seq, lap: state.LapCount?.CurrentLap, utc: new Date(when).toISOString() });
     if (this.items.length > 120) this.items.shift();
     // Pop-up for the driver you're following.
     const sel = this.store.selected;
@@ -61,6 +66,15 @@ export class Moments {
       if (ts && !(data.Status === '1' && !race)) this.#add(t, state, { kind: 'flag', cls: ts[0], text: ts[1] });
     }
 
+    if (topic === 'SessionStatus' && data?.Status) {
+      // Lights out: the race goes from Inactive to Started (the formation lap is not 'Started').
+      if (race && data.Status === 'Started' && this.session && this.session !== 'Started') {
+        this.#add(t, state, { kind: 'flag', cls: 'green', text: this.everStarted ? 'The race restarts' : 'Lights out · the race is on' });
+      }
+      if (data.Status === 'Started') this.everStarted = true;
+      this.session = data.Status;
+    }
+
     if (topic === 'WeatherData' && data?.Rainfall !== undefined) {
       const raining = Number(data.Rainfall) > 0;
       if (this.rain !== undefined && raining !== this.rain) this.#add(t, state, { kind: 'flag', cls: 'rain', text: raining ? 'Rain is falling at the track' : 'Rain has stopped' });
@@ -69,6 +83,7 @@ export class Moments {
 
     if (topic === 'RaceControlMessages') {
       const msgs = Array.isArray(data?.Messages) ? data.Messages : Object.values(data?.Messages || {});
+      for (const m of msgs) if (m && /EXTRA FORMATION LAP|START (PROCEDURE )?(HAS BEEN |IS )?ABORTED|ABORTED START|START (HAS BEEN |IS )?(DELAYED|POSTPONED)|DELAYED START|(START|FORMATION LAPS?) BEHIND THE SAFETY CAR|RACE DISTANCE|LAPS? REDUCED/i.test(m.Message || '')) this.#add(t, state, { kind: 'flag', cls: 'yellow', text: esc(m.Message) });
       for (const m of msgs) if (m && /PENALTY|DISQUALIF/.test(m.Message || '')) this.#add(t, state, { kind: 'pen', cls: 'pen', text: esc(m.Message.replace(/^FIA STEWARDS:\s*/, '')) });
       for (const m of msgs) if (m && /WILL (RESUME|RESTART|START) AT|WILL NOT RESUME/i.test(m.Message || '')) this.#add(t, state, { kind: 'flag', cls: 'resume', text: esc(m.Message) + ' (track time)' });    }
 

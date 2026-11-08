@@ -54,7 +54,19 @@ The terminal prints a second address (like `http://192.168.1.20:3000`) for your 
 | `npm run replay` | Replays the newest recording. Add a file name, `--speed 5`, `--skip 600` (seconds). |
 | `npm run record` | Records the live feed without the dashboard. |
 
-You can also switch between Live, Demo and Replay from Settings without restarting.
+You can also switch between Live, Demo and Replay from the app without restarting.
+
+## Replays
+
+Every session Pit Wall shows live is saved on the laptop. Press **Replays** in the top bar (or "Watch a replay" when nothing is live) to pick one. A replay starts a minute before the scheduled start, so a race shows the formation lap.
+
+While it plays, the bar at the bottom works like a video player: play / pause (or the space bar), back or forward 30 s, speed 1× to 30×, and a timeline with the starts, red flags, safety cars and chequered flags marked. Click a mark to jump just before it. **Live** goes back to live timing. Starting a replay is done on the laptop; once one is playing, any screen can pause or skip it.
+
+## Flags and the start
+
+When the track status changes, a flag waves on screen and the screen edges light up in its colour (Layout → Flag changes: waving flag, screen glow only, or off). At the start of a race the five red lights come on and go out.
+
+F1's free feed says nothing during the formation lap: the race only counts as started at lights out. Pit Wall shows a countdown to the scheduled start, then "Formation lap" (or "Extra formation lap", "Start delayed", "Start aborted" when race control says so), with the cars lined up on the grid on the track map.
 
 ## Matching the TV (delay)
 

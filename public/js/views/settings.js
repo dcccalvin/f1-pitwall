@@ -15,16 +15,13 @@ export class Settings {
   async open(focus) {
     this.body.innerHTML = '<p class="muted" style="padding:20px 0">Loading…</p>';
     if (!this.dlg.open) this.dlg.showModal();
-    const [info, recs] = await Promise.all([
-      fetch('/api/info').then((r) => r.json()).catch(() => ({})),
-      fetch('/api/recordings').then((r) => r.json()).catch(() => ({ files: [] })),
-    ]);
+    const info = await fetch('/api/info').then((r) => r.json()).catch(() => ({}));
     this.info = info;
-    this.#render(info, recs.files || []);
+    this.#render(info);
     if (focus) this.body.querySelector(`[data-sec="${focus}"]`)?.scrollIntoView({ block: 'start' });
   }
 
-  #render(info, files) {
+  #render(info) {
     const st = info.status || {};
     const local = info.canEditSettings;
     const exp = st.tokenExpires ? new Date(st.tokenExpires) : null;
@@ -43,17 +40,13 @@ export class Settings {
 
       <section class="set-sec" data-sec="source">
         <h3>Data source</h3>
-        <p>Live uses F1's timing feed while a session is running. Demo plays a simulated race so you can try everything any time.</p>
+        <p>Live uses F1's timing feed while a session is running. Replays plays back any session saved on this laptop. Demo plays a simulated race so you can try everything any time.</p>
         <div class="seg">
           <button data-mode="live" class="${mode === 'live' ? 'on' : ''}" ${local ? '' : 'disabled'}>Live</button>
           <button data-mode="demo" class="${mode === 'demo' && !demoF1 ? 'on' : ''}" ${local ? '' : 'disabled'}>Demo race</button>
           <button data-mode="demo-f1tv" class="${demoF1 ? 'on' : ''}" ${local ? '' : 'disabled'}>Demo + F1 TV preview</button>
-          <button data-mode="replay" class="${mode === 'replay' ? 'on' : ''}" ${local && files.length ? '' : 'disabled'}>Replay</button>
+          <button type="button" data-open-replays class="${mode === 'replay' ? 'on' : ''}">Replays…</button>
         </div>
-        ${files.length ? `<div class="row-actions"><select id="rec-file" ${local ? '' : 'disabled'}>${files.map((f) => `<option value="${esc(f.name)}">${esc(f.name.replace(/\.jsonl$/, '').replace(/_/g, ' '))} · ${(f.size / 1048576).toFixed(1)} MB</option>`).join('')}</select>
-          <select id="rec-speed" ${local ? '' : 'disabled'}><option value="1">1× speed</option><option value="2">2×</option><option value="5">5×</option><option value="10">10×</option></select></div>
-          <p class="muted" style="margin-top:8px">Every live session you watch is saved for replay (F1 now locks its own archive behind a login).</p>`
-          : '<p class="muted">No recordings yet. Sessions are saved automatically while Live is on.</p>'}
         ${local ? '' : '<p class="muted">Change the data source on the laptop running Pit Wall.</p>'}
       </section>
 

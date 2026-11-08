@@ -124,6 +124,12 @@ export class Simulator extends EventEmitter {
   // ---------------------------------------------------------------- setup
   #reset() {
     this.simT = 0;
+    // Race start: a short countdown to the scheduled start, the formation lap (the
+    // free feed says nothing during it), then lights out = SessionStatus "Started".
+    this.preT = 0;
+    this.formationAt = 20;
+    this.lightsAt = 50;
+    this.started = false;
     this.wallStart = Date.now();
     this.finished = false;
     this.track_status = '1';
@@ -222,13 +228,13 @@ export class Simulator extends EventEmitter {
     const state = {
       SessionInfo: {
         Meeting: { Key: 9999, Name: 'São Paulo Grand Prix', OfficialName: 'Demo race', Location: 'São Paulo', Country: { Code: 'BRA', Name: 'Brazil' }, Circuit: { Key: 14, ShortName: 'Interlagos' } },
-        Key: 99999, Type: 'Race', Name: 'Race', StartDate: utc(now).slice(0, 19), GmtOffset: '-03:00:00',
+        Key: 99999, Type: 'Race', Name: 'Race', StartDate: utc(now + (this.formationAt * 1000) / this.speed - 3 * 3600e3).slice(0, 19), GmtOffset: '-03:00:00',
         Path: this.radio.sessionPath, Demo: true,
       },
-      SessionStatus: { Status: 'Started' },
+      SessionStatus: { Status: 'Inactive' },
       TrackStatus: { Status: '1', Message: 'AllClear' },
       LapCount: { CurrentLap: 1, TotalLaps: TOTAL_LAPS },
-      ExtrapolatedClock: { Utc: utc(now), Remaining: '02:00:00', Extrapolating: true },
+      ExtrapolatedClock: { Utc: utc(now), Remaining: '02:00:00', Extrapolating: false },
       WeatherData: this.#weatherMsg(),
       DriverList: driverList,
       TimingData: { Lines: lines, Withheld: false },
@@ -287,6 +293,15 @@ export class Simulator extends EventEmitter {
 
   #tick() {
     const dt = (TICK_MS / 1000) * this.speed;
+    if (!this.started) {
+      this.preT += dt;
+      if (this.preT < this.lightsAt) return; // on the grid / formation lap
+      this.started = true;
+      const now = utc();
+      this.#send('SessionStatus', { Status: 'Started' });
+      this.#send('SessionData', { StatusSeries: { 0: { Utc: now, SessionStatus: 'Started' } } });
+      this.#send('ExtrapolatedClock', { Utc: now, Remaining: '02:00:00', Extrapolating: true });
+    }
     const t0 = this.simT;
     this.simT += dt;
     const before = new Map(this.cars.map((c) => [c, c.prog]));

@@ -1,6 +1,6 @@
 // Track map: circuit outline (MultiViewer's public circuit data) with a dot per car.
 // Positions are estimated from timing loops (free) or real GPS (F1 TV).
-import { esc, teamColor, driverOrder, trackState } from '../format.js';
+import { esc, teamColor, driverOrder, trackState, sessionPhase } from '../format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const rad = (d) => (d * Math.PI) / 180;
@@ -120,6 +120,35 @@ export class TrackMap {
     return best;
   }
 
+  /**
+   * Grid slot behind the start line: two staggered columns, pole on one side. Spaced
+   * so the dots stay readable (a real grid is tighter than a dot is wide at this scale).
+   * Returns { x, y, back } where back is how far behind the line, as a lap fraction.
+   */
+  #gridPoint(slot) {
+    const { pts, tt, lapT, size } = this.circuit;
+    const r = size * 0.019;
+    let need = r * 0.9 + slot * r * 1.15;
+    let i = pts.length - 1;
+    let a = pts[0];
+    while (i > 0) {
+      const b = pts[i];
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d >= need) {
+        const k = need / (d || 1);
+        const x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k;
+        const nx = -(b.y - a.y) / (d || 1), ny = (b.x - a.x) / (d || 1);
+        const side = (slot % 2 ? -1 : 1) * r * 0.75;
+        const tNext = i + 1 < tt.length ? tt[i + 1] : lapT;
+        return { x: x + nx * side, y: y + ny * side, back: Math.max(0, 1 - (tt[i] + (tNext - tt[i]) * (1 - k)) / lapT) };
+      }
+      need -= d;
+      a = b;
+      i--;
+    }
+    return { ...pts[0], back: 0 };
+  }
+
   #pointAt(frac) {
     const { tt, lapT, pts } = this.circuit;
     const t = frac * lapT;
@@ -208,6 +237,9 @@ export class TrackMap {
     const live = this.gps.active;
     const ts = trackState(s).key;
     const slow = ts === 'sc' ? 1.4 : ts === 'vsc' || ts === 'vsc-ending' ? 1.32 : ts === 'red' ? 50 : 1;
+    // Before lights out the cars sit on the grid (F1's free feed has nothing while they
+    // do the formation lap); a car only leaves its slot if the timing shows it moving.
+    const onGrid = !live && kind(s) === 'race' && sessionPhase(s) === 'pre';
     const seen = new Set();
     const labels = []; // placed label boxes, so crowded labels can be hidden
     const lw = this.circuit.size * 0.075, lh = this.circuit.size * 0.04;
@@ -226,6 +258,13 @@ export class TrackMap {
       if (live) {
         const g = this.gps.pos(num, now);
         if (g && !(g.x === 0 && g.y === 0) && !(kind(s) !== 'race' && l.InPit)) p = rotate(g.x, g.y, this.circuit.rot, this.circuit.cx, this.circuit.cy);
+      } else if (onGrid && !l.InPit && !l.Retired && !l.Stopped && !l.PitOut && !(this.est.last(num)?.t > now - 25000)) {
+        const slot = (Number(s.TimingAppData?.Lines?.[num]?.GridPos) || Number(l.Line) || i + 1) - 1;
+        const gp = this.#gridPoint(slot);
+        // Remember it as 'just behind the line' so the first loop after lights out eases forward.
+        const lastP = this.est.last(num)?.p;
+        this.display.set(num, (lastP != null ? Math.round(lastP) : 0) - gp.back);
+        p = gp;
       } else if (this.est.visible(num) && !l.Retired && !l.Stopped) {
         // Continuous progress in laps (never wraps), so easing never runs the wrong way round.
         const target = this.est.progress(num, now, s, slow);

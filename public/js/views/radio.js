@@ -1,5 +1,5 @@
 // Team radio: list of clips with a single shared audio player.
-import { esc, teamColor, sessionLocalTime } from '../format.js';
+import { esc, teamColor, sessionLocalTime, sessionKind, sessionStartUtc } from '../format.js';
 import { avatar } from '../media.js';
 
 const PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
@@ -52,9 +52,12 @@ function contextAt(state) {
   const series = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter((x) => x?.Utc)
     .map((x) => ({ t: Date.parse(x.Utc), session: x.SessionStatus, track: x.TrackStatus }))
     .sort((a, b) => a.t - b.t);
+  // A race is 'Inactive' through the formation lap; it starts at the scheduled time.
+  const formationFrom = sessionKind(state) === 'race' ? sessionStartUtc(state?.SessionInfo) : null;
   return (utc) => {
     const t = Date.parse(utc);
-    if (!t || !series.length) return null;
+    if (!t) return null;
+    if (!series.length) return formationFrom && t >= formationFrom && !state?.SessionStatus?.Started && state?.SessionStatus?.Status !== 'Started' ? ['pre', 'Formation lap'] : null;
     let session = null, track = null, everStarted = false;
     for (const s of series) {
       if (s.t > t) break;
@@ -62,6 +65,7 @@ function contextAt(state) {
       if (s.track) track = s.track;
     }
     if (session === 'Aborted') return ['red', 'Red flag'];
+    if ((session === 'Inactive' || !session) && !everStarted && formationFrom && t >= formationFrom) return ['pre', 'Formation lap'];
     if (session === 'Inactive') return everStarted ? ['paused', 'Before restart'] : ['pre', 'Before start'];
     if (session === 'Finished' || session === 'Finalised' || session === 'Ends') return ['pre', 'After the chequered flag'];
     if (/SCDeployed/i.test(track || '')) return ['sc', 'Safety car'];

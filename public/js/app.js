@@ -19,6 +19,7 @@ import { LapHistory } from './history.js';
 import { FlagShow } from './views/flagshow.js';
 import { DriverSheet } from './views/sheet.js';
 import { Settings } from './views/settings.js';
+import { Replays, ReplayBar } from './views/replay.js';
 
 const dirty = new Set(['*']);
 
@@ -33,14 +34,33 @@ const store = {
   fastestLap: null,
   ws: null,
 
-  /** "Now" on the data timeline this screen is showing (server clock minus delay). */
-  playNow() { return Date.now() + this.clockOffset - this.delay * 1000; },
+  stateGen: 0, // bumped on every full state (connect, delay change, replay jump)
+  replay: null, // replay player info from the server, while a replay plays
+
+  /** Replays run without a TV delay: they are not live. */
+  effDelay() { return this.status?.mode === 'replay' ? 0 : this.delay; },
+
+  /** "Now" on the data timeline this screen is showing (server clock minus delay; frozen while a replay is paused). */
+  playNow() {
+    const t = Date.now() + this.clockOffset - this.effDelay() * 1000;
+    const r = this.status?.mode === 'replay' ? this.replay : null;
+    return r && (r.paused || r.ended) ? Math.min(t, r.at) : t;
+  },
+
+  /** Real-world time of what is on screen: in a replay, the time in the recording. */
+  dataNow() {
+    const r = this.status?.mode === 'replay' ? this.replay : null;
+    if (!r) return this.playNow();
+    return r.recT + (r.paused || r.ended ? 0 : (Date.now() + this.clockOffset - r.at) * r.speed);
+  },
+
+  setReplay(info) { this.replay = info || null; dirty.add('*'); },
   dirty() { dirty.add('*'); },
 
   setDelay(sec) {
     this.delay = Math.max(0, Math.min(this.maxDelay, Math.round(sec)));
     localStorage.setItem('delay', String(this.delay));
-    send({ type: 'delay', seconds: this.delay });
+    if (this.status?.mode !== 'replay') { send({ type: 'delay', seconds: this.delay }); this.sentDelay = this.delay; }
     dirty.add('*');
   },
   sync(driver) { send({ type: 'sync', driver }); },
@@ -114,11 +134,14 @@ store.map = map;
 const driverPanel = new DriverPanel(store);
 const flags = new FlagShow(store);
 store.flagShow = (key, label) => flags.show(key, label);
+store.lightsOut = () => flags.lightsOut();
+const replayBar = new ReplayBar(store);
+new Replays(store);
 const pace = new Pace(store);
 new Settings(store);
 const layout = new Layout(store);
 
-const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, radar, driverPanel, pace, sheet];
+const views = [header, tower, map, rc, radio, strategy, telemetry, battles, moments, radar, driverPanel, pace, sheet, replayBar];
 store.selected = localStorage.getItem('selected') || null;
 
 // Click a driver anywhere to follow them; double-click to open the Driver panel.
@@ -173,7 +196,7 @@ function openLayoutPop(btn) {
     <div class="presets-grid">${Object.entries(PRESETS).map(([k, p]) => `<button class="preset${cur === k ? ' on' : ''}" data-preset="${k}">${thumb(p)}<b>${esc(p.name)}</b><span>${esc(p.desc)}</span></button>`).join('')}</div>
     <div class="pop-sec"><div class="pop-k">Text size</div><div class="seg">${['compact', 'comfortable', 'large'].map((d) => `<button data-density="${d}" class="${density === d ? 'on' : ''}">${d === 'large' ? 'Large (sofa)' : d[0].toUpperCase() + d.slice(1)}</button>`).join('')}</div></div>
     <div class="pop-sec"><div class="pop-k">Theme</div><div class="seg">${[['dark', 'Dark'], ['paper', 'Paper (light)']].map(([k, n]) => `<button data-theme="${k}" class="${document.body.dataset.theme === k ? 'on' : ''}">${n}</button>`).join('')}</div></div>
-    <div class="pop-sec"><div class="pop-k">Flag animations</div><div class="seg">${[['1', 'On'], ['0', 'Off']].map(([v, n]) => `<button data-flaganim="${v}" class="${(flags.enabled ? '1' : '0') === v ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+    <div class="pop-sec"><div class="pop-k">Flag changes</div><div class="seg">${[['flag', 'Waving flag'], ['glow', 'Screen glow only'], ['off', 'Off']].map(([v, n]) => `<button data-flaganim="${v}" class="${flags.mode === v ? 'on' : ''}">${n}</button>`).join('')}</div></div>
     <div class="pop-sec"><div class="pop-k">Accent</div><div class="swatches">${ACCENTS.map((a) => `<button data-accent="${a}" class="sw sw-${a}${accent === a ? ' on' : ''}" title="${a}"></button>`).join('')}</div></div>
     <div class="pop-sec"><div class="pop-k">Panels</div><div class="chips">${Object.entries(WIDGETS).map(([id, w]) => `<button data-panel="${id}" class="pchip${layout.placed(id) ? ' on' : ''}">${w.icon}${esc(w.title)}</button>`).join('')}</div></div>
     <div class="pop-foot"><button class="btn" data-reset>Reset to default</button></div>`;
@@ -188,7 +211,7 @@ function openLayoutPop(btn) {
     else if (b.dataset.density) store.setLook({ density: b.dataset.density });
     else if (b.dataset.accent) store.setLook({ accent: b.dataset.accent });
     else if (b.dataset.theme) store.setLook({ theme: b.dataset.theme });
-    else if (b.dataset.flaganim) { flags.setEnabled(b.dataset.flaganim === '1'); if (flags.enabled) flags.show('green', 'This is how flag changes will look'); }
+    else if (b.dataset.flaganim) { flags.setMode(b.dataset.flaganim); flags.show('green'); }
     else if (b.dataset.panel) layout.show(b.dataset.panel, !layout.placed(b.dataset.panel));
     else if (b.hasAttribute('data-reset')) { localStorage.removeItem('layout'); localStorage.removeItem('towerCols'); store.setLook({ density: 'comfortable', accent: 'mono', theme: 'dark' }); layout.applyPreset(window.innerWidth >= 1700 ? 'engineer' : 'pitwall'); }
     openLayoutPop(btn);
@@ -208,6 +231,7 @@ function computeDerived() {
 function onState(m) {
   const sessionChanged = store.state.SessionInfo?.Key !== m.state?.SessionInfo?.Key;
   store.state = m.state || {};
+  store.stateGen++;
   if (Number.isFinite(m.delay)) store.delay = m.delay;
   estimated.reset(store.state, m.at);
   gps.reset();
@@ -260,6 +284,7 @@ function connect() {
   store.ws = ws;
   ws.onopen = () => {
     store.connected = true;
+    store.sentDelay = undefined; // a new connection starts at the server's default delay
     retry = 500;
     if (store.wsDownSince && Date.now() - store.wsDownSince > 4000) store.toast('Reconnected to Pit Wall. Timing is up to date.', 'ok');
     store.wsDownSince = null;
@@ -271,7 +296,10 @@ function connect() {
       store.clockOffset = m.serverNow - Date.now();
       store.status = m.status || {};
       store.maxDelay = m.maxDelay || 300;
-      if (Number.isFinite(store.delay)) send({ type: 'delay', seconds: store.delay });
+      store.replay = m.replay || null;
+      // Replays play with no delay; live and demo use this screen's own delay.
+      const want = m.mode === 'replay' ? 0 : store.delay;
+      if (Number.isFinite(want) && want !== store.sentDelay) { store.sentDelay = want; send({ type: 'delay', seconds: want }); }
       dirty.add('*');
     } else if (m.type === 'state') onState(m);
     else if (m.type === 'msgs') onMsgs(m.msgs);
@@ -284,7 +312,8 @@ function connect() {
     } else if (m.type === 'ping') {
       store.lastDataAt = m.lastDataAt;
       store.clockOffset = store.clockOffset * 0.8 + (m.serverNow - Date.now()) * 0.2;
-    } else if (m.type === 'toast') store.toast(m.text);
+    } else if (m.type === 'replay') store.setReplay(m.info);
+    else if (m.type === 'toast') store.toast(m.text);
   };
   ws.onclose = () => {
     if (store.ws !== ws) return;
@@ -373,7 +402,7 @@ function renderEmpty(el) {
     ${next ? `<div class="next"><div class="k">${live ? 'Happening now' : 'Next session'}</div><div class="v">${esc(next.race)} · ${esc(next.name)}</div>
       <div class="cd">${live ? 'Starting…' : days >= 1 ? `${days}d ${fmtClock((ms / 1000) % 86400)}` : fmtClock(ms / 1000)}</div>
       <div class="k">${new Date(next.start).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} your time</div></div>` : ''}
-    <div class="actions"><button class="btn primary" id="empty-demo">Try the demo race</button></div>
+    <div class="actions"><button class="btn primary" data-open-replays>Watch a replay</button><button class="btn" id="empty-demo">Try the demo race</button></div>
   </div>`;
   if (el.dataset.k !== html) {
     el.dataset.k = html;
