@@ -108,6 +108,9 @@ public/
   js/history.js           LapHistory: every lap of every car (shared with the server)
   js/tracker.js           Where each car is on track: estimated from timing loops, or real GPS with F1 TV
   js/penalties.js         Time penalties, drive-throughs and stop-go's from race control messages
+  js/investigations.js    Stewards' incidents followed from "noted" to a decision
+  js/racegaps.js          Every car's time behind the leader (lapped cars too) and the pit rejoin estimate
+  js/crossover.js         Lap times as a weather signal: slicks slowing, inters quickening, which is faster
   js/media.js             Driver photos, team logos, car images (F1's public images via /api/img)
   js/layout.js            Dock layout: columns, tab groups, drag and drop, presets, phone tabs, focus mode
   js/views/
@@ -258,7 +261,7 @@ Model choice (`transcribeModel`, `transcribeDtype` in `config.json`): `whisper-s
 
 ### 6.4 Connection handling (`server/f1feed.js`)
 
-`F1Feed` reconnects with its own schedule (1, 2, 4, 8, 15 s), classifies network errors as `offline`, and forces a reconnect when nothing (not even a heartbeat) has arrived for 45 s. Its `status` tells the browser when the link went down, when it will retry and how long it was down; the yellow/red bar under the top bar is drawn from that.
+`F1Feed` reconnects with its own schedule (1, 2, 4, 8, 15 s), classifies network errors as `offline`, and forces a reconnect when nothing has arrived for 45 s (20 s while timing is flowing, i.e. during a running session). Each connection attempt gets 20 s (`CONNECT_TIMEOUT_MS`) and its first HTTP request 15 s. Without those limits a half-dead network left one attempt hanging for up to 5 minutes, which blacked out about 22 minutes of the 2026 São Paulo GP. Its `status` tells the browser when the link went down, when it will retry and how long it was down; the yellow/red bar under the top bar is drawn from that.
 
 ## 7. The front end
 
