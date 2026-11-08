@@ -233,6 +233,11 @@ export class EstimatedTracker {
   inPit(num) {
     return !!this.cars.get(num)?.inPit;
   }
+
+  /** The latest timing-loop anchor of a car: { t, p } (p in laps), or null. */
+  last(num) {
+    return this.cars.get(num)?.hist.at(-1) || null;
+  }
 }
 
 export class GpsTracker {

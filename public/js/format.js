@@ -117,7 +117,49 @@ export function restartInfo(state) {
   return null;
 }
 
-export function trackState(state) {
+/** SessionInfo.StartDate is local track time; GmtOffset turns it into UTC ms. */
+export function sessionStartUtc(info) {
+  if (!info?.StartDate) return null;
+  const local = Date.parse(`${String(info.StartDate).slice(0, 19)}Z`);
+  if (isNaN(local)) return null;
+  const m = /^(-)?(\d+):(\d+)/.exec(info.GmtOffset || '');
+  const off = m ? (m[1] ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
+  return local - off * 60000;
+}
+
+/**
+ * Race / sprint start procedure. On F1's free feed a race stays "Inactive" through
+ * the formation lap and only becomes "Started" at lights out, so: past the scheduled
+ * start but not started = formation lap (unless race control says otherwise).
+ * Returns null outside a race's pre-start, else
+ *   { stage: 'countdown', to } | { stage: 'formation'|'extra'|'delayed'|'aborted'|'waiting', label, behindSc }
+ */
+export function startProcedure(state, now = Date.now()) {
+  if (sessionKind(state) !== 'race' || sessionPhase(state) !== 'pre') return null;
+  const sched = sessionStartUtc(state?.SessionInfo);
+  const restart = restartInfo(state); // "FORMATION LAP WILL START AT 14:25"
+  if (restart?.kind === 'start' && restart.utc > now) return { stage: 'countdown', to: restart.utc };
+  if (!sched) return null;
+  if (now < sched) return { stage: 'countdown', to: sched };
+  let stage = 'formation', since = sched, behindSc = false;
+  for (const m of rcList(state)) {
+    const x = String(m.Message || '');
+    const at = utcMs(m.Utc);
+    if (/EXTRA FORMATION LAP/i.test(x)) { stage = 'extra'; since = at; }
+    else if (/START (PROCEDURE )?(HAS BEEN |IS )?ABORTED|ABORTED START/i.test(x)) { stage = 'aborted'; since = at; }
+    else if (/START (HAS BEEN |IS )?(DELAYED|POSTPONED|SUSPENDED)|DELAYED START|START PROCEDURE SUSPENDED/i.test(x)) { stage = 'delayed'; since = at; }
+    else if (/FORMATION LAP (WILL )?START|FORMATION LAP UNDERWAY/i.test(x) && at >= sched - 60000) { stage = 'formation'; since = at; }
+    const announced = /START\w*\s+(?:AT|AROUND)\s+(\d{1,2})[:.](\d{2})/i.exec(x); // "... WILL START AT 14:20"
+    if (announced) { stage = 'formation'; since = trackLocalToUtc(announced[1], announced[2], m.Utc, state?.SessionInfo?.GmtOffset); }
+    if (/(START|FORMATION LAPS?) BEHIND THE SAFETY CAR|SAFETY CAR START/i.test(x)) behindSc = true;
+  }
+  // A formation lap takes 2–4 minutes; much longer with no word means a hold-up.
+  if ((stage === 'formation' || stage === 'extra') && now - Math.max(sched, since) > 12 * 60000) stage = 'waiting';
+  const label = { formation: 'Formation lap', extra: 'Extra formation lap', delayed: 'Start delayed', aborted: 'Start aborted', waiting: 'Waiting for the start' }[stage];
+  return { stage, label: behindSc && (stage === 'formation' || stage === 'extra') ? `${label} · behind SC` : label, behindSc };
+}
+
+export function trackState(state, now = Date.now()) {
   const phase = sessionPhase(state);
   const st = String(state?.TrackStatus?.Status ?? '1');
   if (phase === 'finished') {
@@ -142,8 +184,13 @@ export function trackState(state) {
   if (phase === 'pre') {
     // Before the start, still report a flag if race control has one out.
     if (st !== '1' && TRACK_STATUS[st]) return TRACK_STATUS[st];
+    const proc = startProcedure(state, now);
+    if (proc?.label) return { key: proc.stage === 'aborted' ? 'red' : 'none', label: proc.label };
     const info = restartInfo(state);
-    return { key: 'none', label: info?.kind === 'start' ? `Starts ${info.local}` : 'Not started' };
+    if (info?.kind === 'start') return { key: 'none', label: `Starts ${info.local}` };
+    const sched = sessionStartUtc(state?.SessionInfo);
+    if (sched && now < sched) return { key: 'none', label: `Starts ${sessionLocalTime(new Date(sched).toISOString(), state.SessionInfo.GmtOffset).slice(0, 5)}` };
+    return { key: 'none', label: 'Not started' };
   }
   return TRACK_STATUS[st] || { key: 'none', label: state?.TrackStatus?.Message || '—' };
 }

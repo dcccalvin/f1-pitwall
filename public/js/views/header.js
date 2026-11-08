@@ -1,17 +1,7 @@
 // Top bar: event, track status, lap / clock, weather, delay control, connection.
-import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder } from '../format.js';
+import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder, sessionStartUtc, startProcedure } from '../format.js';
 
 const $ = (id) => document.getElementById(id);
-
-/** SessionInfo.StartDate is local track time; GmtOffset turns it into UTC ms. */
-function sessionStartUtc(info) {
-  if (!info?.StartDate) return null;
-  const local = Date.parse(`${info.StartDate.slice(0, 19)}Z`);
-  const m = /^(-)?(\d+):(\d+)/.exec(info.GmtOffset || '');
-  if (isNaN(local)) return null;
-  const off = m ? (m[1] ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
-  return local - off * 60000;
-}
 
 /** Restart a CSS animation class on an element. */
 function retrigger(el, cls) {
@@ -63,22 +53,38 @@ export class Header {
     badge.hidden = !(mode === 'demo' || mode === 'replay');
     badge.textContent = mode === 'demo' ? 'Demo' : 'Replay';
 
-    const ts = trackState(s);
+    const dnow = this.store.dataNow();
+    const ts = trackState(s, dnow);
+    const kind = sessionKind(s);
+    const phase = sessionPhase(s);
+    // A full state (connecting, changing delay, jumping in a replay) is not a change
+    // that happened on track: no flag or lights-out animation for it.
+    const fresh = this.gen !== this.store.stateGen;
+    this.gen = this.store.stateGen;
     if (document.body.dataset.track !== ts.key) {
-      const first = !this.seenTrack;
+      const first = !this.seenTrack || fresh;
       document.body.dataset.track = ts.key;
       if (!first) { retrigger($('track-pill'), 'enter'); this.store.flagShow?.(ts.key, ts.label); }
       this.seenTrack = true;
     }
+    // Lights out: a race goes from not running to running (start, or a standing
+    // restart after a red flag; not when the safety car leads them away).
+    if (!fresh && kind === 'race' && phase === 'running' && ['pre', 'paused', 'suspended'].includes(this.phase) && ts.key !== 'sc') this.store.lightsOut?.();
+    this.phase = phase;
     if ($('track-label').textContent !== ts.label) $('track-label').textContent = ts.label;
 
-    const kind = sessionKind(s);
-    const phase = sessionPhase(s);
     const restart = restartInfo(s);
+    const proc = startProcedure(s, dnow);
     // Before the start (or while waiting to restart after a red flag) F1 sends
     // a frozen clock. Count down to the announced (re)start time instead.
     this.countTo = null;
-    if (phase === 'pre') {
+    this.formation = null;
+    if (proc?.stage === 'countdown') {
+      this.countTo = proc.to;
+      this.countLabel = ['Starts in', 'Starting'];
+    } else if (proc) {
+      this.formation = proc; // formation lap: lights out comes next
+    } else if (phase === 'pre') {
       this.countTo = restart?.kind === 'start' ? restart.utc : sessionStartUtc(s.SessionInfo);
       this.countLabel = ['Starts in', 'Starting'];
     } else if ((phase === 'paused' || phase === 'suspended') && restart?.kind === 'resume') {
@@ -86,7 +92,14 @@ export class Header {
       this.countLabel = ['Resumes in', 'Resuming'];
     }
     this.frozen = phase === 'suspended' || phase === 'paused';
-    if (this.countTo) {
+    if (this.formation) {
+      $('lc-label').textContent = this.formation.label;
+      const total = s.LapCount?.TotalLaps;
+      const html = total ? `${esc(total)}<small> laps</small>` : '—';
+      if ($('lc-value').innerHTML !== html) $('lc-value').innerHTML = html;
+      $('lc-bar').style.width = '0%';
+      this.clockMode = false;
+    } else if (this.countTo) {
       $('lc-label').textContent = this.countLabel[0];
       this.clockMode = true;
       $('lc-bar').style.width = '0%';
@@ -121,7 +134,7 @@ export class Header {
       $('wx-arrow').style.transform = `rotate(${(Number(w.WindDirection) + 180) % 360}deg)`;
       $('wx-rain').hidden = !(Number(w.Rainfall) > 0);
     }
-    this.#wet(s);
+    this.#wet(s, fresh);
 
     const st = this.store.status || {};
     const state = !this.store.connected ? 'reconnecting' : st.state || 'connecting';
@@ -138,7 +151,7 @@ export class Header {
   }
 
   /** Rain / wet-session chip: live rainfall, race control wet declarations, rain risk, wet tyres. */
-  #wet(s) {
+  #wet(s, fresh) {
     const raining = Number(s.WeatherData?.Rainfall) > 0;
     const raw = s.RaceControlMessages?.Messages;
     const msgs = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(Boolean).map((m) => String(m.Message || ''));
@@ -183,14 +196,17 @@ export class Header {
     if ($('wet-label').textContent !== label) $('wet-label').textContent = label;
 
     // Tell the user once when rain starts (not on first load).
-    if (this.wasRaining === false && raining) this.store.toast('Rain is falling at the track', 'rain');
+    if (!fresh && this.wasRaining === false && raining) this.store.toast('Rain is falling at the track', 'rain');
     this.wasRaining = raining;
   }
 
-  frame(now) {
+  frame() {
     if (!this.clockMode) return;
+    const now = this.store.dataNow(); // in a replay: the time in the recording
     if (this.countTo) {
       const left = (this.countTo - now) / 1000;
+      // Reaching the scheduled start of a race means the formation lap: redraw.
+      if (left <= 0 && this.countedTo !== this.countTo) { this.countedTo = this.countTo; this.store.dirty(); }
       const txt = left > 0 ? fmtClock(left) : 'Soon';
       const el = $('lc-value');
       if (el.textContent !== txt) el.textContent = txt;
@@ -202,10 +218,8 @@ export class Header {
     let txt = '—', rem = null;
     if (c?.Remaining) {
       rem = parseClock(c.Remaining);
-      // Live: count down from the feed's own timestamp. Replays: from when the
-      // clock message was played back (its original timestamp is in the past).
-      const seen = this.store.clockSeen;
-      const from = this.store.status?.mode === 'replay' && seen?.utc === c.Utc ? seen.t : Date.parse(c.Utc);
+      // Count down from the feed's own timestamp (in a replay, `now` is recording time).
+      const from = Date.parse(String(c.Utc).endsWith('Z') ? c.Utc : `${c.Utc}Z`);
       if (c.Extrapolating && from) rem -= (now - from) / 1000;
       rem = Math.max(0, rem);
       txt = fmtClock(rem);
