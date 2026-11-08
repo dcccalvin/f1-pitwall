@@ -1,6 +1,8 @@
 // Team radio: list of clips with a single shared audio player.
 import { esc, teamColor, sessionLocalTime, sessionKind, sessionStartUtc } from '../format.js';
-import { avatar } from '../media.js';
+import { avatar, img, teamLogo } from '../media.js';
+
+const BARS = 7;
 
 const PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
 const PAUSE = '<svg viewBox="0 0 16 16"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/></svg>';
@@ -93,8 +95,24 @@ export class TeamRadio {
     this.playing = null;
     this.count = -1;
     this.audio.addEventListener('timeupdate', () => this.#progress());
-    this.audio.addEventListener('ended', () => { this.playing = null; this.#mark(); });
-    this.audio.addEventListener('error', () => { this.root.querySelector(`.clip[data-path="${CSS.escape(this.playing || '')}"]`)?.classList.add('error'); this.playing = null; this.#mark(); });
+    this.audio.addEventListener('ended', () => { this.playing = null; this.#mark(); this.#hideCard(); });
+    this.audio.addEventListener('error', () => { this.root.querySelector(`.clip[data-path="${CSS.escape(this.playing || '')}"]`)?.classList.add('error'); this.playing = null; this.#mark(); this.#hideCard(); });
+    this.audio.addEventListener('playing', () => this.#showCard());
+    this.audio.addEventListener('pause', () => this.#hideCard(250)); // short wait: switching clips pauses then plays
+
+    // Who's talking: a card with the driver while a clip plays.
+    this.popup = document.getElementById('radio-popup');
+    this.popup.checked = localStorage.getItem('radioPopup') !== '0'; // on by default
+    this.popup.addEventListener('change', () => {
+      localStorage.setItem('radioPopup', this.popup.checked ? '1' : '0');
+      if (!this.popup.checked) this.#hideCard();
+      else if (this.playing && !this.audio.paused) this.#showCard();
+    });
+    this.card = document.getElementById('radiocard');
+    this.card.addEventListener('click', (e) => {
+      if (e.target.closest('[data-rc="stop"]')) { this.audio.pause(); this.playing = null; this.#mark(); return; }
+      if (this.card.dataset.num) this.store.select(this.card.dataset.num, { toggle: false });
+    });
     this.root.addEventListener('click', (e) => {
       const c = e.target.closest('.clip');
       if (c) this.toggle(c.dataset.path);
@@ -114,7 +132,15 @@ export class TeamRadio {
       this.ctx = new Ctx();
       this.src = this.ctx.createMediaElementSource(this.audio);
       const chain = buildVoiceChain(this.ctx);
-      chain.output.connect(this.ctx.destination);
+      // Everything passes an analyser on its way out, so the pop-up's bars follow the voice.
+      this.analyser = this.ctx.createAnalyser();
+      this.analyser.fftSize = 1024;
+      this.analyser.smoothingTimeConstant = 0.55;
+      // F1's clips are heavily compressed and loud: a high range keeps the bars moving with the words.
+      this.analyser.minDecibels = -70;
+      this.analyser.maxDecibels = -10;
+      this.analyser.connect(this.ctx.destination);
+      chain.output.connect(this.analyser);
       this.chainIn = chain.input;
       this.#route();
     } catch (e) {
@@ -128,7 +154,75 @@ export class TeamRadio {
   #route() {
     if (!this.ctx) return;
     this.src.disconnect();
-    this.src.connect(this.clean.checked ? this.chainIn : this.ctx.destination);
+    this.src.connect(this.clean.checked ? this.chainIn : this.analyser);
+  }
+
+  /** Show who's talking: photo, name, team, position, voice level, progress. */
+  #showCard() {
+    clearTimeout(this.hideTimer);
+    const cap = this.#captures().find((c) => c.Path === this.playing);
+    if (!cap || !this.popup.checked) return;
+    const s = this.store.state;
+    const num = String(cap.RacingNumber);
+    const d = s.DriverList?.[num] || {};
+    const line = s.TimingData?.Lines?.[num] || {};
+    const tag = contextAt(s)(recordedUtc(cap.Path, s.SessionInfo?.GmtOffset) || cap.Utc);
+    const when = cap.Utc ? sessionLocalTime(cap.Utc, s.SessionInfo?.GmtOffset).slice(0, 5) : '';
+    this.card.dataset.num = num;
+    this.card.style.setProperty('--tc', teamColor(d));
+    this.card.innerHTML = `
+      <div class="rcard-photo">${avatar(d, 'av')}</div>
+      <div class="rcard-main">
+        <div class="rcard-k"><span class="rcard-level" aria-hidden="true">${'<i></i>'.repeat(BARS)}</span>Team radio${when ? ` · ${esc(when)}` : ''}${tag ? ` · <em class="clip-tag ${tag[0]}">${esc(tag[1])}</em>` : ''}</div>
+        <div class="rcard-name"><b>${esc(d.Tla || num)}</b><span>${esc(d.FullName || d.BroadcastName || '')}</span></div>
+        <div class="rcard-team">${img(teamLogo(d), 'rcard-logo')}<span>${esc(d.TeamName || '')}${line.Position ? ` · P${esc(line.Position)}` : ''}</span></div>
+        <div class="rcard-bar"><i></i></div>
+      </div>
+      <button class="rcard-stop" data-rc="stop" title="Stop" aria-label="Stop"><svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor"/></svg></button>`;
+    this.card.hidden = false;
+    this.card.classList.remove('out');
+    this.card.classList.add('in');
+    this.bars = [...this.card.querySelectorAll('.rcard-level i')];
+    this.cardBar = this.card.querySelector('.rcard-bar i');
+    cancelAnimationFrame(this.levelRaf);
+    this.#level();
+  }
+
+  #hideCard(wait = 0) {
+    clearTimeout(this.hideTimer);
+    this.hideTimer = setTimeout(() => {
+      if (this.card.hidden || (!this.audio.paused && this.playing)) return;
+      cancelAnimationFrame(this.levelRaf);
+      this.card.classList.add('out');
+      this.hideTimer = setTimeout(() => { this.card.hidden = true; this.card.classList.remove('in', 'out'); }, 320);
+    }, wait);
+  }
+
+  /** Voice level bars: speech bands from the analyser (or a gentle idle pulse without Web Audio). */
+  #level() {
+    const a = this.analyser;
+    const data = a ? new Uint8Array(a.frequencyBinCount) : null;
+    const hz = a ? this.ctx.sampleRate / a.fftSize : 0;
+    const step = () => {
+      if (this.card.hidden) return;
+      if (a) {
+        a.getByteFrequencyData(data);
+        // Seven bands between 250 Hz and 3.6 kHz, where a voice on the radio sits.
+        for (let i = 0; i < BARS; i++) {
+          const lo = Math.floor((250 * 1.49 ** i) / hz), hi = Math.max(lo + 1, Math.floor((250 * 1.49 ** (i + 1)) / hz));
+          let sum = 0;
+          for (let k = lo; k < hi && k < data.length; k++) sum += data[k];
+          const v = Math.min(1, Math.max(0, (sum / (hi - lo) / 255 - 0.1) * 1.7));
+          this.bars[i].style.transform = `scaleY(${(0.12 + v * 0.88).toFixed(3)})`;
+        }
+      } else {
+        const t = performance.now() / 180;
+        this.bars.forEach((b, i) => { b.style.transform = `scaleY(${(0.35 + 0.3 * Math.abs(Math.sin(t + i * 0.9))).toFixed(3)})`; });
+      }
+      if (this.audio.duration) this.cardBar.style.width = `${(this.audio.currentTime / this.audio.duration) * 100}%`;
+      this.levelRaf = requestAnimationFrame(step);
+    };
+    step();
   }
 
   toggle(path) {
