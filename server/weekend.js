@@ -116,6 +116,21 @@ async function startWeather(lat, lon, startIso) {
 }
 
 let cache = { at: 0, data: null };
+let meetingsCache = { at: 0, year: null, list: [] };
+
+/** The meeting under way, or the next one (this season, then next season). Cached 6 h. */
+async function nextMeeting(now) {
+  const year = new Date(now).getUTCFullYear();
+  for (const y of [year, year + 1]) {
+    if (meetingsCache.year !== y || Date.now() - meetingsCache.at > 6 * 3600e3) {
+      const list = await json(`https://api.openf1.org/v1/meetings?year=${y}`).catch(() => []);
+      meetingsCache = { at: Date.now(), year: y, list: list.sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start)) };
+    }
+    const m = meetingsCache.list.find((x) => !x.is_cancelled && Date.parse(x.date_end) > now);
+    if (m) return m;
+  }
+  return null;
+}
 
 /** Everything for the between-sessions screen. `schedule` is the season schedule (with circuit lat/lon). */
 export async function nextUp(schedule, { force = false, state = null } = {}) {
@@ -126,15 +141,21 @@ export async function nextUp(schedule, { force = false, state = null } = {}) {
 
   let sessions = [], meeting = null;
   try {
-    sessions = await json('https://api.openf1.org/v1/sessions?meeting_key=latest');
-    [meeting] = await json('https://api.openf1.org/v1/meetings?meeting_key=latest');
-    sessions.sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start));
+    // This weekend, or the next one: OpenF1 lists the whole season's meetings and sessions in advance.
+    meeting = await nextMeeting(now);
+    if (meeting) {
+      sessions = await json(`https://api.openf1.org/v1/sessions?meeting_key=${meeting.meeting_key}`);
+      sessions.sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start));
+    }
   } catch (e) { out.errors.push(`sessions: ${e.message}`); }
 
   // The next session that hasn't finished: from this weekend if there is one, else the season schedule.
   const nextS = sessions.find((s) => Date.parse(s.date_end) > now && !s.is_cancelled);
   if (nextS && meeting) {
-    out.meeting = { key: meeting.meeting_key, name: meeting.meeting_name, circuit: meeting.circuit_short_name, country: meeting.country_name, year: meeting.year, gmtOffset: meeting.gmt_offset };
+    out.meeting = {
+      key: meeting.meeting_key, name: meeting.meeting_name, circuit: meeting.circuit_short_name, circuitKey: meeting.circuit_key,
+      country: meeting.country_name, countryCode: meeting.country_code, year: meeting.year, gmtOffset: meeting.gmt_offset,
+    };
     out.next = { name: nextS.session_name, type: nextS.session_type, start: nextS.date_start, end: nextS.date_end, key: nextS.session_key };
   } else {
     const s = (schedule?.sessions || []).find((x) => Date.parse(x.start) > now - 2 * 3600e3);

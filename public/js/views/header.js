@@ -46,15 +46,20 @@ export class Header {
   update() {
     const s = this.store.state;
     const info = s.SessionInfo || {};
-    $('event-name').textContent = info.Meeting?.Name ? `${info.Meeting.Name} · ${info.Meeting.Circuit?.ShortName || ''}` : '—';
-    $('event-cc').textContent = info.Meeting?.Country?.Code || '—';
-    $('session-name').textContent = info.Name || (this.store.connected ? 'No session' : 'Connecting…');
-    const badge = $('mode-badge');
-    const mode = this.store.status?.mode;
-    badge.hidden = !(mode === 'demo' || mode === 'replay');
-    badge.textContent = mode === 'demo' ? 'Demo' : 'Replay';
-
     const dnow = this.store.dataNow();
+    const mode = this.store.status?.mode;
+    // Between sessions (an old session, or none): name the next event, not the last one.
+    const idle = mode === 'live' && (sessionOver(s, dnow) || !Object.keys(s.TimingData?.Lines || {}).length);
+    const nm = idle ? this.store.nextup?.meeting : null;
+    const upNext = idle ? this.store.nextup?.next : null;
+    const eventName = nm?.name ? `${nm.name}${nm.circuit ? ` · ${nm.circuit}` : ''}` : info.Meeting?.Name ? `${info.Meeting.Name} · ${info.Meeting.Circuit?.ShortName || ''}` : '—';
+    $('event-name').textContent = eventName;
+    $('event-cc').textContent = (nm ? nm.countryCode : info.Meeting?.Country?.Code) || '—';
+    $('session-name').textContent = upNext?.name || info.Name || (this.store.connected ? 'No session' : 'Connecting…');
+    const badge = $('mode-badge');
+    badge.hidden = !(mode === 'demo' || mode === 'replay' || upNext);
+    badge.textContent = mode === 'demo' ? 'Demo' : mode === 'replay' ? 'Replay' : 'Up next';
+
     const ts = trackState(s, dnow);
     const kind = sessionKind(s);
     const phase = sessionPhase(s);
@@ -76,6 +81,8 @@ export class Header {
     const over = this.store.status?.mode === 'live' && sessionOver(s, dnow);
     const label = over ? `${info.Name || 'Session'} finished` : ts.label;
     if ($('track-label').textContent !== label) $('track-label').textContent = label;
+    // Nothing on track: the countdown to the next session says it all.
+    $('track-pill').hidden = over;
 
     const restart = restartInfo(s);
     const proc = startProcedure(s, dnow);
@@ -141,7 +148,9 @@ export class Header {
       $('wx-arrow').style.transform = `rotate(${(Number(w.WindDirection) + 180) % 360}deg)`;
       $('wx-rain').hidden = !(Number(w.Rainfall) > 0);
     }
-    this.#wet(s, fresh);
+    // The rain chip is about the session on track; an old session's "low grip" is no news.
+    if (over) $('wet-chip').hidden = true;
+    else this.#wet(s, fresh);
 
     const st = this.store.status || {};
     const state = !this.store.connected ? 'reconnecting' : st.state || 'connecting';

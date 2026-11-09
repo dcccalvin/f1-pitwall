@@ -1,6 +1,6 @@
 {
   "name": "f1-pitwall",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
