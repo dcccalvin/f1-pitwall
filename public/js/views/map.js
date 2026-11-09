@@ -43,8 +43,14 @@ export class TrackMap {
   }
 
   async #load(state) {
-    const key = state?.SessionInfo?.Meeting?.Circuit?.Key;
-    const year = Number(String(state?.SessionInfo?.StartDate || '').slice(0, 4)) || new Date().getFullYear();
+    let key = state?.SessionInfo?.Meeting?.Circuit?.Key;
+    let year = Number(String(state?.SessionInfo?.StartDate || '').slice(0, 4)) || new Date().getFullYear();
+    // Between sessions, show the circuit of the next event rather than the last one.
+    const next = this.store.nextup?.meeting;
+    if (next?.circuitKey && this.store.status?.mode === 'live' && (!key || sessionOver(state, this.store.dataNow()))) {
+      key = next.circuitKey;
+      year = next.year || year;
+    }
     if (!key || `${key}-${year}` === this.key) return;
     this.key = `${key}-${year}`;
     try {
