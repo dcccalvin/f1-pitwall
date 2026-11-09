@@ -4,7 +4,7 @@
 // over a street map with 10/25/50 km rings, plus a plain-words outlook for the circuit.
 // (Free radar services stop at "now"; the forecast frames are a weather model, so
 // they are smoother and coarser than real radar.)
-import { esc } from '../format.js';
+import { esc, sessionOver } from '../format.js';
 
 const RADAR_MAX_Z = 7;
 const TILE = 256;
@@ -159,11 +159,18 @@ export class Radar {
     this.#show(next);
   }
 
-  /** Circuit location from the season schedule (closest race to this session's date). */
+  /** Between sessions (an old finished session, or none) the radar shows where the next one is. */
+  #idle() {
+    const s = this.store.state;
+    return this.store.status?.mode === 'live' && (sessionOver(s, this.store.dataNow()) || !Object.keys(s.TimingData?.Lines || {}).length);
+  }
+
+  /** Circuit location from the season schedule (closest race to this session's date, or the next one's). */
   #location() {
     const s = this.store.state;
     const races = this.store.schedule?.races || [];
-    const day = Date.parse(String(s.SessionInfo?.StartDate || '').slice(0, 10)) || Date.now();
+    const next = this.#idle() ? Date.parse(this.store.nextup?.next?.start || '') : NaN;
+    const day = (isFinite(next) && next) || Date.parse(String(s.SessionInfo?.StartDate || '').slice(0, 10)) || Date.now();
     let best = null, bestD = Infinity;
     for (const r of races) {
       if (!isFinite(r.lat) || !isFinite(r.lon)) continue;
@@ -177,7 +184,8 @@ export class Radar {
   update() {
     const loc = this.#location();
     if (loc && (!this.loc || loc.name !== this.loc.name)) { this.loc = loc; this.key = ''; this.forecast = null; this.#loadForecast(); }
-    const w = this.store.state.WeatherData;
+    // Wind comes from the track's weather station: only for the session on now.
+    const w = this.#idle() ? null : this.store.state.WeatherData;
     const wind = w ? `Wind ${Number(w.WindSpeed).toFixed(1)} m/s from ${compass(Number(w.WindDirection))}` : '';
     const windEl = this.root.querySelector('.rd-wind');
     if (windEl.textContent !== wind) windEl.textContent = wind;
