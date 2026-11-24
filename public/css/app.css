@@ -1169,3 +1169,4 @@ body.replaying .delay-btn { display: none; }
   .tb-btn span { display: none; }
   .tb-btn { padding: 0 9px; }
 }
+.rp-note { color: var(--text-3); font-size: 12px; margin-top: 5px; }

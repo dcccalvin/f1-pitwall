@@ -83,6 +83,41 @@ function lastStopWasRed(state) {
   return rcList(state).some((m) => m.Flag === 'RED');
 }
 
+/** The qualifying part coming up after a break: "Q2", "SQ3"... (null outside qualifying). */
+export function nextPart(state) {
+  if (sessionKind(state) !== 'quali') return null;
+  const q = /sprint/i.test(state?.SessionInfo?.Name || '') ? 'SQ' : 'Q';
+  // Race control names it ("Q2 WILL START AT 20:27"); else the part after the one just finished.
+  const msgs = rcList(state);
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const r = /^(S?Q[123])\b/.exec(String(msgs[i].Message || ''));
+    if (r) return r[1];
+    if (/CHEQUERED/.test(String(msgs[i].Message || ''))) break;
+  }
+  const done = Number(state?.TimingData?.SessionPart) || 1;
+  return done < 3 ? `${q}${done + 1}` : null;
+}
+
+/** restartInfo(), but only from race control messages since the last chequered flag
+ *  (so Q2's start time isn't mistaken for Q3's). */
+export function announcedSinceFlag(state) {
+  const msgs = rcList(state);
+  let i = msgs.length - 1;
+  while (i >= 0 && !/CHEQUERED/.test(String(msgs[i].Message || ''))) i--;
+  return restartInfo({ ...state, RaceControlMessages: { Messages: msgs.slice(i + 1) } });
+}
+
+/** Has race control said the next part is delayed, since the last chequered flag? */
+function delayedSinceLastFlag(state, part) {
+  const msgs = rcList(state);
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const t = String(msgs[i].Message || '');
+    if (/CHEQUERED/.test(t)) return false;
+    if (new RegExp(`^${part}\\b.*DELAYED`).test(t)) return true;
+  }
+  return false;
+}
+
 /** Local track time "16:26" on the session's day -> UTC ms. */
 export function trackLocalToUtc(hh, mm, refUtcString, gmtOffset) {
   const m = /^(-)?(\d+):(\d+)/.exec(gmtOffset || '');
@@ -187,7 +222,13 @@ export function trackState(state, now = Date.now()) {
     // Qualifying ends Q1 and Q2 with a chequered flag too; the session isn't over yet.
     const part = Number(state?.TimingData?.SessionPart) || 0;
     const q = /sprint/i.test(state?.SessionInfo?.Name || '') ? 'SQ' : 'Q';
-    if (sessionKind(state) === 'quali' && part && part < 3) return { key: 'chequered', label: `${q}${part} over · ${q}${part + 1} next` };
+    if (sessionKind(state) === 'quali' && part && part < 3) {
+      const next = `${q}${part + 1}`;
+      const at = announcedSinceFlag(state);
+      if (at?.kind === 'start') return { key: 'chequered', label: `${q}${part} over · ${next} at ${at.local}` };
+      if (delayedSinceLastFlag(state, next)) return { key: 'chequered', label: `${q}${part} over · ${next} delayed` };
+      return { key: 'chequered', label: `${q}${part} over · ${next} next` };
+    }
     return { key: 'chequered', label: 'Chequered flag' };
   }
   if (phase === 'suspended') {
@@ -198,9 +239,16 @@ export function trackState(state, now = Date.now()) {
   }
   if (phase === 'paused') {
     const info = restartInfo(state);
+    const red = lastStopWasRed(state);
     if (info?.kind === 'noresume') return { key: 'red', label: 'Will not resume' };
-    if (info) return { key: 'paused', label: `Resumes ${info.local}` };
-    return lastStopWasRed(state) ? { key: 'paused', label: 'Suspended' } : { key: 'none', label: 'Break' };
+    if (info && (info.kind === 'resume' || red)) return { key: 'paused', label: `Resumes ${info.local}` };
+    // A normal break between qualifying parts: "Q2 WILL START AT 20:27", "Q2 WILL BE DELAYED".
+    const part = nextPart(state);
+    const next = announcedSinceFlag(state);
+    if (next?.kind === 'start') return { key: 'none', label: `${part || 'Next part'} starts ${next.local}` };
+    if (red) return { key: 'paused', label: 'Suspended' };
+    if (part && delayedSinceLastFlag(state, part)) return { key: 'none', label: `${part} delayed` };
+    return { key: 'none', label: part ? `Break · ${part} next` : 'Break' };
   }
   if (phase === 'pre') {
     // Before the start, still report a flag if race control has one out.

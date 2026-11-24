@@ -68,7 +68,15 @@ export class DriverPanel {
     const rcm = list(s.RaceControlMessages?.Messages).filter((m) => mention.test(m.Message || ''));
     const seenMsg = new Set();
     const mentions = rcm.filter((m) => { const k = m.Utc + m.Message; if (seenMsg.has(k)) return false; seenMsg.add(k); return true; });
-    const strikes = mentions.filter((m) => /DELETED/.test(m.Message) && /TRACK LIMITS/.test(m.Message)).length;
+    // Track-limit strikes: deleted lap times, minus any the stewards later reinstated
+    // ("CAR 16 (LEC) TIME 1:40.101 WILL BE REINSTATED").
+    const deleted = mentions.filter((m) => /DELETED/.test(m.Message) && /TRACK LIMITS/.test(m.Message)).map((m) => /TIME ([\d:.]+) DELETED/.exec(m.Message)?.[1] || m.Message);
+    for (const m of mentions) {
+      const back = /TIME ([\d:.]+) (?:WILL BE |HAS BEEN )?REINSTATED/.exec(m.Message)?.[1];
+      const i = back ? deleted.indexOf(back) : -1;
+      if (i >= 0) deleted.splice(i, 1);
+    }
+    const strikes = deleted.length;
     const bw = mentions.some((m) => /BLACK AND WHITE/.test(m.Message));
 
     // team radio from this driver

@@ -18,6 +18,8 @@ import { Simulator } from './simulator.js';
 import { Replayer, describe } from './replay.js';
 import { nextUp } from './weekend.js';
 import { Transcriber } from './transcribe.js';
+import { KeepAwake } from './keepawake.js';
+import { sessionPhase, sessionStartUtc, sessionOver } from '../public/js/format.js';
 import { Recorder, recordingPath } from './recorder.js';
 import { LapHistory } from '../public/js/history.js';
 import { applyMessage as applyMsg } from '../public/js/merge.js';
@@ -163,7 +165,7 @@ function recordingList() {
       hit = { key, d };
       describeCache.set(f, hit);
     }
-    return { ...hit.d, size: st.size, mtime: st.mtimeMs, recording: !!(recorder?.file && path.resolve(recorder.file) === file) };
+    return { ...hit.d, size: st.size, mtime: st.mtimeMs, recording: !!(recorder?.stream && recorder?.file && path.resolve(recorder.file) === file) };
   }).sort((a, b) => (b.recordedAt || b.mtime) - (a.recordedAt || a.mtime));
 }
 
@@ -500,6 +502,20 @@ wss.on('connection', (ws) => {
 });
 
 // Every 5 s tell each screen when F1 data last arrived, so it can warn about silence.
+// Don't let the computer sleep while a live session is on (from an hour before the
+// scheduled start until the session is over), so a night race is recorded to the end.
+const keepAwake = new KeepAwake();
+function sessionNeedsUs(state, now = Date.now()) {
+  if (mode !== 'live' || !cfg.keepAwake) return false;
+  const phase = sessionPhase(state);
+  if (phase === 'running' || phase === 'suspended' || phase === 'paused') return true;
+  if (phase === 'finished') return !sessionOver(state, now);
+  const start = sessionStartUtc(state?.SessionInfo);
+  return phase === 'pre' && !!start && now > start - 3600e3 && now < start + 4 * 3600e3;
+}
+setInterval(() => keepAwake.set(sessionNeedsUs(timeline.state), 'a session is on'), 30000);
+process.on('exit', () => keepAwake.set(false));
+
 setInterval(() => broadcast({ type: "ping", serverNow: Date.now(), lastDataAt: source?.lastDataAt || null, mode }), 5000);
 
 // Stream each screen the updates that are now "due" for its delay.

@@ -96,6 +96,10 @@ server/
   timeline.js             State + rolling history, so each screen can watch with its own delay
   weekend.js              "Up next": next session, starting grid after penalties, start forecast
   transcribe.js           Team radio -> text with a local Whisper model (queue, cache, model loading)
+  keepawake.js            Holds off sleep while a live session is on (Windows: SetThreadExecutionState via PowerShell; macOS: caffeinate)
+
+tools/
+  schedule-sessions.ps1   Windows: one scheduled task per remaining session that wakes the PC and runs start.cmd --background
   config.js               Reads config.json and environment variables
 
 public/
@@ -199,7 +203,7 @@ Three clocks matter in the browser (`public/js/app.js`):
 {"t":<ms epoch>,"type":"feed","topic":"TimingData","data":{...},"ts":"<feed timestamp>"}
 ```
 
-Only live data is recorded, never the demo or a replay. A lock file (`recordings/.recording.lock`) stops two running copies from writing the same session twice. These files are also the best test data you have: see [9](#9-testing-and-debugging).
+Only live data is recorded, never the demo or a replay. A lock file (`recordings/.recording.lock`) stops two running copies from writing the same session twice. Between sessions F1 re-sends the last, finished session on every reconnect; the recorder keeps one copy of that final state per file, not one per reconnect. A file with only that final state (Pit Wall started after the session) is described with `snapshot: true` and listed as "final result only". These files are also the best test data you have: see [9](#9-testing-and-debugging).
 
 ## 5. F1's live timing feed: what to know
 

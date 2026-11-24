@@ -8,7 +8,7 @@
 // about one incident together.
 
 const STEP = { noted: 1, investigating: 2, after: 2, cleared: 3, penalty: 3 };
-export const STATUS_LABEL = { noted: 'Noted', investigating: 'Under investigation', after: 'After the race', cleared: 'No further action', penalty: 'Penalty' };
+export const STATUS_LABEL = { noted: 'Noted', investigating: 'Under investigation', after: 'After the session', cleared: 'No further action', penalty: 'Penalty' };
 
 const tidy = (s) => String(s || '').replace(/^\s*[-–]\s*/, '').replace(/\s*\(\d{1,2}:\d{2}(:\d{2})?\)\s*$/, '').trim();
 const sentence = (s) => { const t = tidy(s).toLowerCase(); return t ? t[0].toUpperCase() + t.slice(1) : ''; };
@@ -22,7 +22,9 @@ export function investigations(state) {
     const text = String(m.Message);
     if (!/INCIDENT|PENALTY|INVESTIGAT|SUMMONED|REPRIMAND|WARNING|DISQUALIF/.test(text)) continue;
     if (/TRACK LIMITS AT TURN|DELETED/.test(text) && !/INCIDENT/.test(text)) continue; // lap time deletions: counted elsewhere
-    const cars = [...text.matchAll(/(?:CARS? |AND )(\d{1,2}) \(([A-Z]{3})\)/g)].map((r) => ({ num: r[1], tla: r[2] }));
+    // Every car named: "CAR 44 (HAM)", "CARS 44 (HAM) AND 1 (NOR)", "CARS 16 (LEC), 81 (PIA), 1 (NOR)".
+    const cars = [...text.matchAll(/\b(\d{1,2}) \(([A-Z]{3})\)/g)].map((r) => ({ num: r[1], tla: r[2] }))
+      .filter((c, i, all) => all.findIndex((x) => x.num === c.num) === i);
     if (!cars.length) continue;
     const at = /\((\d{1,2}:\d{2}(?::\d{2})?)\)\s*$/.exec(text)?.[1] || null;
     let status = null, decision = null;
@@ -36,7 +38,14 @@ export function investigations(state) {
     if (!status) continue;
     const where = /\b(TURN \d+|PIT LANE|PIT ENTRY|PIT EXIT)\b/.exec(text)?.[1] || null;
     const reason = sentence(/(?:NOTED|INVESTIGATION|AFTER THE (?:RACE|SESSION|SPRINT)|NO FURTHER ACTION|NO FURTHER INVESTIGATION|PENALTY FOR CARS? \d+ \([A-Z]{3}\)(?: AND \d+ \([A-Z]{3}\))?)\s*-\s*(.+)$/.exec(text)?.[1] || '');
-    const key = at ? `${at}|${cars.map((c) => c.num).sort().join(',')}` : `${cars.map((c) => c.num).sort().join(',')}|${reason}`;
+    const carKey = cars.map((c) => c.num).sort().join(',');
+    const key = at ? `${at}|${carKey}` : `${carKey}|${reason}`;
+    // "UPDATE TURN 8 INCIDENT ... (20:22:42)" corrects an earlier message about the same
+    // cars and reason (usually its time): move that incident to the corrected time.
+    if (/^\s*UPDATE\b/.test(text) && !byKey.has(key)) {
+      const old = [...byKey.values()].reverse().find((x) => x.cars.map((c) => c.num).sort().join(',') === carKey && (!reason || !x.reason || x.reason === reason));
+      if (old) { byKey.delete(old.key); old.key = key; old.at = at; byKey.set(key, old); }
+    }
     // A penalty names only the punished car; attach it to the incident at the same time.
     let inc = byKey.get(key) || (at && [...byKey.values()].find((x) => x.at === at && cars.every((c) => x.cars.some((y) => y.num === c.num))));
     if (!inc) {

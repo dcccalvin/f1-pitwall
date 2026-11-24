@@ -193,7 +193,20 @@ export class TeamRadio {
       }
       html = `<b>${esc(said.join(' '))}</b>${said.length && ahead.length ? ' ' : ''}${esc(ahead.join(' '))}`;
     }
-    if (html !== this.shownCaption) { el.innerHTML = html; this.shownCaption = html; }
+    if (html !== this.shownCaption) { el.innerHTML = html; this.shownCaption = html; this.#followCaption(el); }
+  }
+
+  /** Long clips: scroll the caption so the words being said stay in view (one line of what's next below them). */
+  #followCaption(el) {
+    const said = el.querySelector('b');
+    if (!said || el.scrollHeight <= el.clientHeight) return;
+    const rects = said.getClientRects();
+    if (!rects.length) return;
+    const box = el.getBoundingClientRect();
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const bottom = rects[rects.length - 1].bottom - box.top + el.scrollTop; // end of the spoken words, inside the caption
+    const want = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, bottom + line - el.clientHeight));
+    if (Math.abs(el.scrollTop - want) > 2) el.scrollTo({ top: want, behavior: 'smooth' });
   }
 
   /** Show who's talking: photo, name, team, position, voice level, progress. */

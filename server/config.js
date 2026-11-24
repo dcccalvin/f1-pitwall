@@ -22,6 +22,8 @@ export function loadConfig(root) {
     transcribe: !['0', 'false', 'off', 'no'].includes(String(process.env.PITWALL_TRANSCRIBE ?? file.transcribe ?? 'true').toLowerCase()),
     transcribeModel: process.env.PITWALL_STT_MODEL || file.transcribeModel || 'onnx-community/whisper-small.en',
     transcribeDtype: process.env.PITWALL_STT_DTYPE || file.transcribeDtype || 'q8',
+    // Keep the computer awake while a live session is on. Turn off with keepAwake: false.
+    keepAwake: !['0', 'false', 'off', 'no'].includes(String(process.env.PITWALL_KEEP_AWAKE ?? file.keepAwake ?? 'true').toLowerCase()),
   };
 }
 

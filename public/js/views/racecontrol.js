@@ -18,7 +18,7 @@ function classify(m) {
   if (m.Category === 'SafetyCar' || /SAFETY CAR/.test(msg)) return ['sc', /VIRTUAL/.test(msg) || m.Mode === 'VIRTUAL SAFETY CAR' ? 'VSC' : 'Safety car'];
   if (/PENALTY|DISQUALIF|DRIVE THROUGH|STOP\/GO|GRID DROP/.test(msg)) return ['penalty', 'Penalty'];
   if (/INVESTIGAT|NOTED|REVIEWED|SUMMONED/.test(msg)) return ['investigation', 'Stewards'];
-  if (/DELETED|TRACK LIMITS/.test(msg)) return ['limits', 'Track limits'];
+  if (/DELETED|TRACK LIMITS|REINSTATED/.test(msg)) return ['limits', 'Track limits'];
   if (/RAIN|WET/.test(msg)) return ['blue', 'Weather'];
   if (/PIT EXIT|PIT ENTRY/.test(msg)) return ['', 'Pit lane'];
   if (/WILL (RESUME|RESTART|START)|WILL NOT RESUME/.test(msg)) return ['resume', 'Restart'];
