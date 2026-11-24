@@ -182,11 +182,15 @@ export class NextUp {
       const t = sec ? Number(sec[1]) * 60 + Number(sec[2]) : null;
       if (t && (!fl || t < fl.t)) fl = { n, t, v, lap: lines[n].BestLapTime.Lap };
     }
-    // Unserved time penalties change the order: add them to each car's race time.
+    // Unserved time penalties change the order. Straight after the flag F1's order doesn't
+    // include them yet, so add them; once F1 finalises the result it already has (in Las
+    // Vegas 2026 Leclerc's 10 s dropped him from P6 to P10 in F1's own order), so don't.
+    const official = ['Finalised', 'Ends'].includes(s.SessionStatus?.Status);
     const owed = Object.fromEntries(order.map((n) => [n, pens[n]?.pending || 0]));
     const anyOwed = Object.values(owed).some(Boolean);
+    const addOwed = anyOwed && !official;
     let finalOrder = order;
-    if (anyOwed) {
+    if (addOwed) {
       const gaps = raceGaps(s);
       finalOrder = [...order].sort((a, b) => {
         const ra = lines[a].Retired || lines[a].Stopped, rb = lines[b].Retired || lines[b].Stopped;
@@ -221,17 +225,17 @@ export class NextUp {
       const pos = i + 1;
       const moved = grid && !l.Retired ? grid - pos : null;
       const chg = moved > 0 ? `<span class="nu-chg up">▲${moved}</span>` : moved < 0 ? `<span class="nu-chg down">▼${-moved}</span>` : '<span class="nu-chg">–</span>';
-      const pen = owed[n] ? `<span class="d-pen">+${owed[n]}s</span>` : '';
+      const pen = owed[n] ? `<span class="d-pen" title="${official ? 'Time penalty, already in the official order' : 'Time penalty not served: added to the order here'}">+${owed[n]}s</span>` : '';
       const open = cases.some((x) => x.cars.some((c) => c.num === n)) ? '<span class="d-inv after" title="Still with the stewards">INV</span>' : '';
       return `<div class="rs-row${this.store.selected === n ? ' mine' : ''}${l.Retired || l.Stopped ? ' out' : ''}" data-select="${esc(n)}" style="--tc:${teamColor(d)}">
         <span class="rs-pos">${l.Retired || l.Stopped ? '–' : pos}</span>${avatar(d, 'av av-sm')}<b>${esc(d.Tla || n)}</b><span class="rs-team">${esc(d.TeamName || '')}</span><span class="rs-tags">${pen}${open}</span>
         <span class="rs-grid">${grid ? `P${grid}` : ''}</span>${chg}<span class="rs-gap">${esc(gapText(n))}</span>
         <span class="rs-stops">${esc(l.NumberOfPitStops ?? '')}</span><span class="rs-best${fl?.n === n ? ' purple' : ''}">${esc(l.BestLapTime?.Value || '')}</span></div>`;
     }).join('');
-    const changed = anyOwed ? finalOrder.map((n, i) => ({ n, from: order.indexOf(n) + 1, to: i + 1 })).filter((x) => x.from !== x.to) : [];
+    const changed = addOwed ? finalOrder.map((n, i) => ({ n, from: order.indexOf(n) + 1, to: i + 1 })).filter((x) => x.from !== x.to) : [];
     const name = s.SessionInfo?.Meeting?.Name || '';
     el.innerHTML = `<div class="nu rs">
-      <div class="rs-head"><div><div class="nu-k">Provisional result${anyOwed ? ' · time penalties added' : ''}</div>
+      <div class="rs-head"><div><div class="nu-k">${official ? 'Official result' : 'Provisional result'}${addOwed ? ' · time penalties added' : anyOwed ? ' · includes time penalties' : ''}</div>
         <div class="nu-title">${esc(name)}${name ? ' · ' : ''}<b>${esc(s.SessionInfo?.Name || 'Race')}</b>${s.LapCount?.TotalLaps ? ` · ${esc(s.LapCount.TotalLaps)} laps` : ''}</div></div>
         <button class="btn" data-hub="show">Show timing</button></div>
       <div class="rs-podium">${[podium[1], podium[0], podium[2]].filter(Boolean).join('')}</div>
