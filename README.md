@@ -219,6 +219,18 @@ The terminal also prints an address for your phone (like `http://192.168.1.20:30
 
 You can switch between Live, Replays and Demo from the app without restarting.
 
+### Never miss a session
+
+Pit Wall only records while it's running. While a live session is on (from an hour before the start until it's over) it keeps the computer from going to sleep. For night races, let Windows wake the laptop and start Pit Wall 20 minutes before every session:
+
+```powershell
+.\tools\schedule-sessions.ps1            # shows what it would schedule, changes nothing
+.\tools\schedule-sessions.ps1 -Install   # creates the tasks (Task Scheduler > PitWall)
+.\tools\schedule-sessions.ps1 -Remove    # deletes them
+```
+
+Leave the laptop plugged in and asleep (not shut down), with "Allow wake timers" on in the power plan. If Pit Wall wasn't running during a session, the Replays list still keeps its final result, marked "final result only".
+
 ## Match your TV
 
 Your TV or stream is behind real time, so the data arrives first. Use **Delay** in the top bar:
@@ -243,6 +255,7 @@ Copy `config.example.json` to `config.json` to change the defaults:
 | `f1tvToken` | F1 TV token (set it from Settings instead). |
 | `transcribe` | `false` switches radio transcription off. |
 | `transcribeModel` | Whisper model. Default `onnx-community/whisper-small.en`; `onnx-community/whisper-base.en` is faster but less accurate. |
+| `keepAwake` | `false` lets the computer sleep during live sessions. |
 
 Radio transcription downloads its speech model (about 250 MB) the first time, uses about 1 GB of memory while it works, and frees it after 20 quiet minutes.
 
