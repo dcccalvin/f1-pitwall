@@ -73,9 +73,9 @@ export class Replays {
       }).join('');
       return `<div class="rp-item${cur === f.name ? ' cur' : ''}">
         <div class="rp-main"><b>${esc(f.session)}${f.recording ? '<span class="tag">Recording now</span>' : ''}${cur === f.name ? '<span class="tag ok">Playing</span>' : ''}</b>
-          <div class="rp-sub">${esc([f.circuit, day, f.dur ? dur(f.dur) : ''].filter(Boolean).join(' · '))}</div>
-          ${moments ? `<div class="rp-moments">${moments}</div>` : ''}</div>
-        <button type="button" class="btn primary" data-play="${esc(f.name)}" ${can ? '' : 'disabled'}>${PLAY}<span>Play</span></button>
+          <div class="rp-sub">${esc([f.circuit, day, f.snapshot ? 'final result only' : f.dur ? dur(f.dur) : ''].filter(Boolean).join(' · '))}</div>
+          ${f.snapshot ? '<div class="rp-note">Pit Wall wasn\'t running during this session, so only the final result was saved.</div>' : moments ? `<div class="rp-moments">${moments}</div>` : ''}</div>
+        <button type="button" class="btn${f.snapshot ? '' : ' primary'}" data-play="${esc(f.name)}" ${can ? '' : 'disabled'}>${PLAY}<span>${f.snapshot ? 'View result' : 'Play'}</span></button>
       </div>`;
     };
     this.body.innerHTML = `

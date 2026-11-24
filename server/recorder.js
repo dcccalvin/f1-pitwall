@@ -7,6 +7,7 @@
 // Pit Wall (or `npm run record`) from writing every message into the same file twice.
 import fs from 'node:fs';
 import path from 'node:path';
+import { sessionOver } from '../public/js/format.js';
 
 const LOCK_STALE_MS = 30000;
 
@@ -69,6 +70,16 @@ export class Recorder {
 
   init(state, t = Date.now()) {
     if (state?.SessionInfo?.Demo || state?.SessionInfo?.Replay) return; // never record demos/replays
+    // Between sessions F1 re-sends the last, finished session on every reconnect. Keep one
+    // copy of its final result, not one per reconnect (that added 33 MB to the 2026 São
+    // Paulo race file in the week after it).
+    if (sessionOver(state, t)) {
+      const file = recordingPath(this.dir, state);
+      if (fs.existsSync(file) && fs.statSync(file).size > 0) {
+        if (this.file === file) this.close(false); // nothing more worth writing to it
+        return;
+      }
+    }
     this.#open(state);
     this.stream?.write(JSON.stringify({ t, type: 'init', data: state }) + '\n');
   }

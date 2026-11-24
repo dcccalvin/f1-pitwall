@@ -105,7 +105,10 @@ export function describe(file, entries = readRecording(file)) {
   let startAt = 0;
   if (sched && sched - t0 > 60000 && sched - t0 < dur * 1000) startAt = (sched - t0) / 1000 - 60;
   else if (first) startAt = Math.max(0, first.at - 60);
+  // Only the final state, no live messages: Pit Wall was started after the session ended.
+  const snapshot = !entries.some((e) => e.type === 'feed' && ACTIVE.has(e.topic));
   return {
+    snapshot,
     name: path.basename(file),
     meeting: info.Meeting?.Name || '',
     session: info.Name || path.basename(file, '.jsonl').replace(/_/g, ' '),
