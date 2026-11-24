@@ -1,5 +1,5 @@
 // Top bar: event, track status, lap / clock, weather, delay control, connection.
-import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder, sessionStartUtc, startProcedure, sessionOver } from '../format.js';
+import { esc, trackState, sessionKind, sessionPhase, restartInfo, parseClock, fmtClock, driverOrder, sessionStartUtc, startProcedure, sessionOver, nextPart, announcedSinceFlag } from '../format.js';
 import { crossover, paceShift } from '../crossover.js';
 
 const $ = (id) => document.getElementById(id);
@@ -104,6 +104,11 @@ export class Header {
     } else if ((phase === 'paused' || phase === 'suspended') && restart?.kind === 'resume') {
       this.countTo = restart.utc;
       this.countLabel = ['Resumes in', 'Resuming'];
+    } else if (phase === 'paused' && announcedSinceFlag(s)?.kind === 'start') {
+      // Break between qualifying parts with the next start announced: count down to it.
+      const part = nextPart(s) || 'Next part';
+      this.countTo = announcedSinceFlag(s).utc;
+      this.countLabel = [`${part} in`, `${part} starting`];
     }
     this.frozen = phase === 'suspended' || phase === 'paused';
     if (this.formation) {
